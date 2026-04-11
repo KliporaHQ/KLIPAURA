@@ -144,16 +144,10 @@ export default function AvatarStudioPage() {
       setLoggedIn(true)
       return
     }
-    void (async () => {
-      try {
-        const r = await fetch(`${baseUrl}/api/v1/modules`)
-        if (r.ok) setLoggedIn(true)
-        else router.replace('/')
-      } catch {
-        router.replace('/')
-      }
-    })()
-  }, [baseUrl, router])
+    // No Bearer token: `/api/v1/modules` would 401 anyway. Avoid a slow/hanging fetch to a dead
+    // loopback when the UI service is split from FastAPI (Railway) — send user to sign-in.
+    router.replace('/')
+  }, [router])
 
   const loadSaved = useCallback(async () => {
     setLoadingList(true)

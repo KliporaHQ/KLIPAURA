@@ -26,6 +26,8 @@ This monorepo uses **config-as-code** at the service root:
    - **Mission Control (build + runtime):** `NEXT_PUBLIC_API_BASE_URL=https://<your-api-host>` (browser → API; required when UI and API are different origins). Optional: `NEXT_PUBLIC_MC_SKIP_LOGIN=1` for dev-like access.
 4. Attach domains (e.g. API + `app.` for the dashboard). See **`docs/DEPLOYMENT.md`** for CORS (`CORS_ALLOW_ORIGINS`) and worker env mirroring **`klip-avatar/core_v1/.env`**.
 
+**Avatar Studio / Mission Control API (important):** Routes like `/api/v1/avatar-studio/*` and `/api/v1/modules` are implemented on **Mission Control FastAPI** (`klip-mission-control/main.py` / uvicorn **port 8000** in combined Docker), **not** on the root **`hitl_server`** image alone. On **split** Railway deploys (Next.js only on the frontend service), set **`NEXT_PUBLIC_API_BASE_URL`** to the public URL of the service that runs **`main.py`**, with **CORS** allowing your UI origin. Sign in from `/` (or set **`NEXT_PUBLIC_MC_SKIP_LOGIN=1`** at build time for smoke tests only). If **`NEXT_PUBLIC_API_BASE_URL`** points only at HITL, Mission Control JSON APIs will not match.
+
 **Autonomous AI affiliate short-form video factory** (clean repo, consolidated from earlier iterations).
 
 ## Current status
