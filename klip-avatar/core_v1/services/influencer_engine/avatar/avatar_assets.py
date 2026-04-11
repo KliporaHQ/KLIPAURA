@@ -1,4 +1,4 @@
-﻿"""
+"""
 Influencer Engine — Avatar Asset Cache.
 
 Stores and retrieves per-avatar assets for consistency across videos:

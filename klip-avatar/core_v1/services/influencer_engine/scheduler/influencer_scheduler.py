@@ -1,4 +1,4 @@
-﻿"""
+"""
 Influencer Engine — InfluencerScheduler.
 
 Loads avatar profiles, determines daily content targets, generates job payloads,

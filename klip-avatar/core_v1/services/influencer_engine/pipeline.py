@@ -1,4 +1,4 @@
-﻿"""
+"""
 Influencer Engine — pipeline entrypoint.
 
 Runs one video job; optionally runs analyze_performance when distribution_result is present.

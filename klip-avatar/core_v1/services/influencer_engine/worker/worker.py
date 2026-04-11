@@ -1,4 +1,4 @@
-﻿"""
+"""
 Influencer Engine — Worker.
 
 Polls queue, runs pipeline (or service_manager.execute_service), ack or retry.
