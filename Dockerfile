@@ -15,7 +15,9 @@ COPY . .
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app:/app/klip-scanner:/app/klip-funnel
 
+# Default when PORT is unset (local). Railway injects PORT for public binding + healthchecks.
+ENV PORT=8080
 EXPOSE 8080
 
-# Railway and other hosts set PORT; default 8080 for local/docker-compose.
-CMD ["sh", "-c", "uvicorn hitl_server:app --app-dir klip-dispatch --host 0.0.0.0 --port ${PORT:-8080}"]
+# exec: uvicorn becomes PID 1 (signals). Shell expands PORT for Railway.
+CMD ["sh", "-c", "exec uvicorn hitl_server:app --app-dir klip-dispatch --host 0.0.0.0 --port ${PORT:-8080}"]

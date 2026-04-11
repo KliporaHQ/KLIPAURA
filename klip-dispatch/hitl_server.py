@@ -708,7 +708,8 @@ def _is_blacklisted(r, url: str) -> bool:
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok"}
+    """Liveness for Railway/load balancers — no Redis; must respond immediately."""
+    return {"status": "ok", "service": "klipaura-hitl-api"}
 
 
 @app.get("/api/ops/summary")

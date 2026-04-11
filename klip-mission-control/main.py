@@ -6,7 +6,8 @@ FastAPI backend for the KLIPAURA OS Mission Control dashboard.
 Provides real-time event streaming, job management, and module orchestration.
 
 Endpoints:
-    GET  /health                          - Health check
+    GET  /health                          - Liveness (fast; Railway-safe)
+    GET  /health/ready                    - Readiness (Redis + metadata)
     GET  /api/v1/events                   - List events (SSE streaming)
     GET  /api/v1/jobs                     - List all jobs
     POST /api/v1/jobs                     - Create new job
@@ -1084,26 +1085,32 @@ async def admin_update_credentials(body: AdminCredentialsUpdate) -> Dict[str, An
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """Liveness for Railway/probes — fast 200; does not block on Redis."""
+    return {"status": "ok", "service": "klipaura-mc-api"}
+
+
+@app.get("/health/ready")
+async def health_ready():
+    """Readiness: Redis ping + metadata (may return degraded if Redis is down)."""
     redis_connected = False
     try:
         r = await get_redis()
-        await r.ping()
+        await asyncio.wait_for(r.ping(), timeout=2.0)
         redis_connected = True
     except Exception:
         pass
-    
+
     return {
         "status": "healthy" if redis_connected else "degraded",
         "version": "1.0.0",
         "redis_connected": redis_connected,
-        "uptime_seconds": (datetime.utcnow() - state.started_at).total_seconds()
+        "uptime_seconds": (datetime.utcnow() - state.started_at).total_seconds(),
     }
 
 
 @app.get("/api/health")
 async def health_check_api_alias():
-    """Same as GET /health. Next.js rewrites and some edges forward ``/api/health`` here (not ``/health``)."""
+    """Same as GET /health (liveness). Next.js rewrites ``/api/health`` here."""
     return await health_check()
 
 
@@ -2761,4 +2768,6 @@ async def hitl_fallback_list_avatars() -> Dict[str, Any]:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    _port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=_port)

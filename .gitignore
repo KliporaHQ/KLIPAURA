@@ -25,4 +25,5 @@ klip-avatar/core_v1/output/
 
 # Local rollback copies (never commit secrets here either)
 *.bak
+*.bak2
 *.egg-info/
