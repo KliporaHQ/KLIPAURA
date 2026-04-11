@@ -1,5 +1,7 @@
 .next/
 node_modules/
+# TS incremental — must not be committed (breaks Railway Nixpacks cache mount at this path)
+*.tsbuildinfo
 .env.local
 .env*.local
 data/
