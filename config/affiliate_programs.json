@@ -1,0 +1,16 @@
+{
+  "_comment": "Single source for affiliate programs. Do not hardcode IDs in code — extend this file and use infrastructure.affiliate_programs.",
+  "enabled_programs": [],
+  "tag_template": "{{program_id}}-{{product_slug}}",
+  "programs": {
+    "example_program": {
+      "display_name": "Example (replace with real program id)",
+      "link_template": "https://example.com/p/{{product_id}}?tag={{affiliate_tag}}",
+      "tag_template": "{{program_id}}-{{product_slug}}",
+      "fields": {
+        "affiliate_tag": "",
+        "product_id": ""
+      }
+    }
+  }
+}

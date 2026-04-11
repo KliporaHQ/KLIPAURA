@@ -1,0 +1,184 @@
+# Influencer Engine — Multi-avatar configuration (YAML-driven).
+# Extended schema: id, name, visual_identity, voice (provider/voice_id), strategy, memory, status.
+# Voice: provider = elevenlabs (TTS). Video/I2V uses WAVESPEED_API_KEY (separate from voice).
+# Legacy fields (visual_profile, voice_profile, persona, brand_style) kept for backward compatibility.
+#
+# Per-avatar distribution & render (optional; overrides global GetLate env when set):
+#   getlate_api_key, getlate_workspace_id — Zernio/GetLate; publish_worker uses these instead of GETLATE_* env.
+#   tiktok_access_token, instagram_access_token, youtube_oauth_token — reserved for future direct API use.
+#   elevenlabs_voice_id — ElevenLabs voice id (optional; may mirror voice.voice_id).
+#   video_style — "influencer" (Ken Burns slideshow, no lipsync) or "affiliate_split" (Beebom hstack + lipsync).
+# On-disk bundles may mirror these under data/avatars/<avatar_id>/social_config.json.
+
+avatars:
+  nova:
+    id: nova
+    name: Nova
+    niche: ai_tools
+    tone: futuristic educator
+    description: |
+      South Indian AI educator in traditional half-saree style. Warm, homely presence with a sharp,
+      pleasing look. Opens with "Vanakkam Makkalae" and teaches AI tools in a fast-paced,
+      high-energy way. Audience: young creators and entrepreneurs. Brand: minimal aesthetic,
+      bold centered subtitles, soft pink and earth tones.
+    platforms:
+      - youtube_shorts
+      - instagram_reels
+      - tiktok
+    posting_frequency_per_day: 4
+    personality_traits:
+      - warm
+      - high-energy
+      - curiosity-driven
+    content_style: fast-paced, educational
+    target_audience: young creators and entrepreneurs
+    signature_phrase: "Vanakkam Makkalae"
+    visual_profile:
+      gender: female
+      age_range: "22-25"
+      ethnicity: south_indian
+      skin_tone: fair
+      face_features: sharp, pleasing, homely
+      attire: traditional south indian half saree
+      style_consistency_id: nova_seed
+    visual_identity:
+      gender: female
+      age_range: "22-25"
+      ethnicity: south_indian
+      style: traditional south indian half saree
+      consistency_seed: nova_seed
+    voice_profile:
+      accent: south_indian
+      tone: warm, friendly
+      energy: medium
+      opening_phrase: "Vanakkam Makkalae"
+    voice:
+      provider: elevenlabs
+      voice_id: default
+      stability: 0.5
+      similarity_boost: 0.75
+    persona:
+      tone: futuristic educator
+      style: fast-paced, high-energy
+      hook_style: curiosity-driven
+    brand_style:
+      color_palette: ["#FFB6C1", "#8B4513"]
+      subtitle_style: bold centered
+      background_style: minimal aesthetic
+    strategy:
+      primary_goal: authority
+      content_mix:
+        educational: 70
+        entertainment: 20
+        promotional: 10
+    memory:
+      enabled: true
+      learning_rate: 0.1
+    getlate_api_key: ""
+    getlate_workspace_id: ""
+    tiktok_access_token: ""
+    instagram_access_token: ""
+    youtube_oauth_token: ""
+    elevenlabs_voice_id: ""
+    video_style: influencer
+    status:
+      active: true
+
+  kai:
+    id: kai
+    name: Kai
+    niche: crypto
+    tone: analytical trader
+    description: |
+      Neutral, confident crypto analyst. Data-driven and professional. Smart casual look.
+      Opens with "Hey everyone" and delivers contrarian takes and market insights.
+      Audience: traders and crypto-curious. Brand: clean, professional.
+    platforms:
+      - youtube_shorts
+      - x
+    posting_frequency_per_day: 3
+    personality_traits:
+      - analytical
+      - confident
+      - data-driven
+    content_style: data-driven, contrarian
+    target_audience: traders and crypto-curious
+    signature_phrase: "Hey everyone"
+    visual_profile:
+      gender: neutral
+      age_range: "25-35"
+      ethnicity: diverse
+      skin_tone: medium
+      face_features: confident, professional
+      attire: smart casual
+      style_consistency_id: kai_seed
+    visual_identity:
+      gender: neutral
+      age_range: "25-35"
+      ethnicity: diverse
+      style: smart casual
+      consistency_seed: kai_seed
+    voice_profile:
+      accent: neutral
+      tone: analytical, confident
+      energy: medium
+      opening_phrase: "Hey everyone"
+    voice:
+      provider: elevenlabs
+      voice_id: default
+      stability: 0.6
+      similarity_boost: 0.8
+    persona:
+      tone: analytical trader
+      style: data-driven, confident
+      hook_style: contrarian take
+    brand_style:
+      color_palette: ["#1E2836", "#3B82F6"]
+      subtitle_style: bold centered
+      background_style: minimal professional
+    strategy:
+      primary_goal: monetization
+      content_mix:
+        educational: 50
+        entertainment: 30
+        promotional: 20
+    memory:
+      enabled: true
+      learning_rate: 0.1
+    getlate_api_key: ""
+    getlate_workspace_id: ""
+    tiktok_access_token: ""
+    instagram_access_token: ""
+    youtube_oauth_token: ""
+    elevenlabs_voice_id: ""
+    video_style: affiliate_split
+    status:
+      active: true
+
+  aria_veda:
+    id: aria_veda
+    avatar_id: aria_veda
+    name: Aria Veda
+    getlate_api_key: ""
+    getlate_workspace_id: ""
+    tiktok_access_token: ""
+    instagram_access_token: ""
+    youtube_oauth_token: ""
+    elevenlabs_voice_id: ""
+    video_style: influencer
+    status:
+      active: true
+
+  kael_vance:
+    id: kael_vance
+    avatar_id: kael_vance
+    name: Kael Vance
+    getlate_api_key: ""
+    getlate_workspace_id: ""
+    tiktok_access_token: ""
+    instagram_access_token: ""
+    youtube_oauth_token: ""
+    elevenlabs_voice_id: ""
+    video_style: affiliate_split
+    status:
+      active: true

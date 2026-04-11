@@ -1,0 +1,13 @@
+# Influencer Engine — Stress test safety limits
+# Prevents overload of local system
+
+max_test_jobs: 1000
+max_concurrent_jobs: 10
+
+# Phases (used by run_stress_test.py)
+warmup_jobs: 10
+medium_load_jobs: 100
+burst_load_jobs: 500
+
+# Concurrency test
+concurrency_test_jobs: 50

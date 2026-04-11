@@ -1,0 +1,16 @@
+# Live operations safety limits (Phase 10)
+# Default: SAFE — no auto-publish unless explicitly enabled
+auto_publish: false
+max_daily_spend: 10
+max_videos_per_day: 20
+
+# Avatar intelligence (Phase 7): auto-creation is OFF by default
+# When true: system can create avatars from high-opportunity trends
+# When false: system only suggests (emits AVATAR_SUGGESTION, no create)
+auto_create_avatars: false
+max_active_avatars: 5
+
+# Optional gates when auto_publish is true:
+# min_quality_score: 0.5
+# min_strategy_confidence: 0.3
+# cost_limit_per_video: 0.5

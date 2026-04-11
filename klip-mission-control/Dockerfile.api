@@ -1,0 +1,13 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY klip-core /app/klip-core
+COPY klip-avatar /app/klip-avatar
+COPY klip-mission-control /app/klip-mission-control
+RUN pip install --no-cache-dir -e /app/klip-core
+RUN pip install --no-cache-dir -r /app/klip-mission-control/requirements.txt
+COPY klip-mission-control/klip_mc /app/klip_mc
+COPY klip-mission-control/hitl_server.py /app/hitl_server.py
+COPY klip-mission-control/job_state_mc.py /app/job_state_mc.py
+ENV PYTHONPATH="/app/klip-avatar:/app/klip-core:/app"
+EXPOSE 8000
+CMD ["uvicorn", "hitl_server:app", "--host", "0.0.0.0", "--port", "8000"]

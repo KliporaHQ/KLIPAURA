@@ -1,0 +1,28 @@
+.env
+.env.*
+!.env.example
+**/__pycache__/
+*.py[cod]
+.python-version
+.venv/
+venv/
+jobs/
+revenue.jsonl
+
+# Avatar secrets (use *.example.json in repo)
+**/data/avatars/**/social_config.json
+
+# Pipeline / media artifacts (large)
+klip-avatar/core_v1/outputs/
+klip-avatar/core_v1/output/
+*.mp4
+*.zip
+*.docx
+
+# Mission Control / Node
+**/node_modules/
+**/.next/
+
+# Local rollback copies (never commit secrets here either)
+*.bak
+*.egg-info/

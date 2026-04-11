@@ -1,0 +1,5 @@
+[WORKER] Online — queue klip:jobs:pending
+[WORKER] Running pipeline job=6fc03feb-65f6-4486-ba84-2ceb57c8db20 retry=3
+[WORKER] job_id=6fc03feb-65f6-4486-ba84-2ceb57c8db20 starting ugc_pipeline subprocess cwd=E:\KLIPAURA\klip-avatar\core_v1 timeout_sec=7200
+[WORKER] job_id=6fc03feb-65f6-4486-ba84-2ceb57c8db20 ugc_pipeline exited rc=99
+[WORKER] Failed rc=99, moved to DLQ

@@ -1,0 +1,359 @@
+---
+description: KLIPAURA Execution Prompts and Build Patterns — phase-specific implementation guide
+alwaysApply: true
+---
+
+# KLIPAURA — EXECUTION GUIDE
+
+Read `klipaura-os-constitution.mdc` first. This file contains the how-to-build details.
+
+---
+
+## PHASE 0 — CLEAN WORKSPACE
+
+**Goal:** Single repo, verified pipeline runs, no legacy imports.
+
+**Key fix required in `ugc_pipeline.py`:**
+```python
+# REMOVE this anti-pattern:
+def _load_phase2() -> Any:
+    spec = importlib.util.spec_from_file_location("phase2_aff", path)
+    ...
+
+# REPLACE with direct imports:
+from scripts.first_affiliate_phase2_output import (
+    _ffmpeg, _ffprobe, ffprobe_duration,
+    resolve_avatar_images, build_product_with_microcuts_and_speed,
+    stretch_video_duration, concat_mp4s, burn_ass,
+    ensure_bgm_local, _ensure_local_image, _resolve_image_for_i2v
+)
+```
+
+Add to `path_bootstrap.py`:
+```python
+import sys, os
+_CORE = os.path.dirname(os.path.abspath(__file__))
+for _p in [_CORE, os.path.join(_CORE, "scripts"), os.path.join(_CORE, "services")]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+```
+
+**Validation gate:** `python -m pipeline.ugc_pipeline` with `UGC_PRODUCT_URL=https://...` produces `outputs/final_publish/FINAL_VIDEO.mp4`.
+
+---
+
+## PHASE 1 — CLOSE THE REVENUE LOOP
+
+### 1A — Job Filesystem + R2 Upload
+
+`infrastructure/job_state.py`:
+```python
+import json, os
+from pathlib import Path
+
+JOBS_DIR = Path(os.getenv("JOBS_DIR", "jobs"))
+
+def create_manifest(job_id: str, payload: dict) -> None:
+    d = JOBS_DIR / job_id
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "manifest.json").write_text(json.dumps({
+        "job_id": job_id, "status": "QUEUED",
+        "created_at": _now(), "payload": payload,
+        "retry_count": 0, "r2_url": None
+    }, indent=2))
+
+def update_manifest(job_id: str, **kwargs) -> None:
+    path = JOBS_DIR / job_id / "manifest.json"
+    data = json.loads(path.read_text())
+    data.update(kwargs)
+    data["updated_at"] = _now()
+    path.write_text(json.dumps(data, indent=2))
+
+def read_manifest(job_id: str) -> dict:
+    return json.loads((JOBS_DIR / job_id / "manifest.json").read_text())
+```
+
+Add to end of `ugc_pipeline.py` main(), after `shutil.copy2`:
+```python
+from infrastructure.job_state import update_manifest
+from infrastructure.storage import upload_to_r2
+from upstash_redis import Redis
+import uuid
+
+job_id = os.environ.get("JOB_ID") or str(uuid.uuid4())[:8]
+r2_url = None
+try:
+    r2_url = upload_to_r2(locked_path, key=f"jobs/{job_id}/final.mp4")
+except Exception:
+    pass  # R2 is optional — local file is fallback
+update_manifest(job_id, status="PREVIEW_PENDING", r2_url=r2_url)
+try:
+    Redis.from_env().lpush("klip:hitl:pending", job_id)
+except Exception:
+    pass  # Redis is optional locally
+```
+
+### 1B — HITL Server
+
+`klip-dispatch/hitl_server.py` — key endpoints:
+```python
+GET  /                → dashboard HTML (9:16 player, APPROVE/REJECT)
+GET  /api/next-job    → pops from klip:hitl:pending, returns job details + presigned R2 URL
+POST /api/approve/{job_id} → update_manifest(PUBLISHING_QUEUED) → publisher.publish_job()
+POST /api/reject/{job_id}  → update_manifest(REJECTED) → blacklist product 7d
+POST /api/regenerate/{job_id} → re-push original payload to klip:jobs:pending
+```
+
+Dashboard uses vanilla JS only. Dark glassmorphism theme. No React.
+
+### 1C — Revenue Tracker
+
+`klip-dispatch/revenue_tracker.py`:
+```python
+import json
+from pathlib import Path
+from datetime import datetime, timezone
+
+LEDGER = Path("revenue.jsonl")
+
+def log(job_id, platform, product_url, asin, commission_rate, avatar_id):
+    entry = {
+        "job_id": job_id, "avatar_id": avatar_id,
+        "platform": platform, "product_url": product_url,
+        "asin": asin, "commission_rate": commission_rate,
+        "posted_at": datetime.now(timezone.utc).isoformat()
+    }
+    with open(LEDGER, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+def get_summary(avatar_id=None) -> dict:
+    entries = [json.loads(l) for l in LEDGER.read_text().splitlines() if l]
+    if avatar_id:
+        entries = [e for e in entries if e["avatar_id"] == avatar_id]
+    return {"total_posts": len(entries), "avatars": list({e["avatar_id"] for e in entries})}
+```
+
+**Validation gate:** Manual pipeline run → HITL shows video → APPROVE → TikTok posts → `revenue.jsonl` has one entry.
+
+---
+
+## PHASE 2 — QUEUE WORKER
+
+`klip-avatar/worker.py`:
+```python
+from upstash_redis import Redis
+from infrastructure.job_state import create_manifest, update_manifest
+import subprocess, json, os, sys
+
+MAX_RETRIES = 3
+
+def main():
+    r = Redis.from_env()
+    print("[WORKER] Online — polling klip:jobs:pending", flush=True)
+    while True:
+        raw = r.blpop(["klip:jobs:pending"], timeout=10)
+        if not raw:
+            continue
+        job = json.loads(raw[1])
+        job_id = job["job_id"]
+        retry = job.get("retry_count", 0)
+        create_manifest(job_id, job)
+        env = {**os.environ,
+               "UGC_PRODUCT_URL": job["product_url"],
+               "ACTIVE_AVATAR_ID": job.get("avatar_id", "theanikaglow"),
+               "JOB_ID": job_id,
+               "KLIP_PIPELINE_RUN": "1"}
+        result = subprocess.run(
+            [sys.executable, "-m", "pipeline.ugc_pipeline"],
+            cwd="klip-avatar/core_v1", env=env
+        )
+        if result.returncode != 0 and retry < MAX_RETRIES:
+            job["retry_count"] = retry + 1
+            r.lpush("klip:jobs:pending", json.dumps(job))
+            update_manifest(job_id, status="RETRYING", retry_count=retry+1)
+        elif result.returncode != 0:
+            r.lpush("klip:dlq", json.dumps(job))
+            update_manifest(job_id, status="DEAD_LETTER")
+
+if __name__ == "__main__":
+    main()
+```
+
+**Validation gate:** `POST /api/jobs {"product_url": "..."}` → 5 min later video appears in HITL with no terminal interaction.
+
+---
+
+## PHASE 3 — KLIP-SELECTOR (CSV FIRST, SCRAPERS SECOND)
+
+Phase 3 v1 uses a CSV of manually curated products. Scrapers are Phase 3 v2.
+
+`products.csv` format:
+```
+url,category,commission_rate,asin,title
+https://amzn.to/...,beauty,8.0,B08XYZ123,Face Serum...
+```
+
+`klip-selector/selector_worker.py`:
+```python
+def run_cycle(limit=5):
+    products = manual_feeder.load()                     # reads products.csv
+    products = [p for p in products if uae_filter.passes(p)]
+    products = sorted(products, key=scorer.score, reverse=True)
+    top = products[:limit]
+    for p in top:
+        if is_blacklisted(p["url"]):
+            continue
+        p["layout"] = layout_router.route(p["category"])
+        p["avatar_id"] = os.getenv("ACTIVE_AVATAR_ID", "theanikaglow")
+        job_id = f"{int(time.time())}_{abs(hash(p['url']))%10000:04d}"
+        Redis.from_env().lpush("klip:jobs:pending", json.dumps({
+            "job_id": job_id, **p, "retry_count": 0
+        }))
+        print(f"[SELECTOR] Queued {job_id}: {p['title'][:60]}", flush=True)
+```
+
+**Validation gate:** `python klip-selector/selector_worker.py` → 5 jobs in Upstash queue → all process automatically → 5 videos in HITL.
+
+---
+
+## PHASE 4 — AUTOPILOT SCHEDULER
+
+`scheduler.py`:
+```python
+import schedule, time, os
+from klip_selector.selector_worker import run_cycle
+from klipaura_core.infrastructure.system_guardian import SystemGuardian
+
+AUTOPILOT = os.getenv("AUTOPILOT_MODE", "0").strip() == "1"
+
+def morning_cycle():   run_cycle(limit=5) if AUTOPILOT else print("[SCHED] morning_cycle (AUTOPILOT_MODE=0, skipped)")
+def evening_cycle():   run_cycle(limit=5) if AUTOPILOT else print("[SCHED] evening_cycle (AUTOPILOT_MODE=0, skipped)")
+def health_check():    SystemGuardian().run_checks()
+
+# UAE timezone: UTC+4
+schedule.every().day.at("02:00").do(morning_cycle)   # 06:00 UAE
+schedule.every().day.at("15:00").do(evening_cycle)   # 19:00 UAE
+schedule.every(30).minutes.do(health_check)
+
+print(f"[SCHEDULER] Online — AUTOPILOT_MODE={'ON' if AUTOPILOT else 'OFF (HITL)'}")
+while True:
+    schedule.run_pending()
+    time.sleep(60)
+```
+
+**Validation gate:** Set `AUTOPILOT_MODE=1`, leave for 48h, return to find 20 videos in HITL queue with no manual action.
+
+---
+
+## PHASE 5 — TRADER SIGNAL + SPAWN GATE
+
+`klip-trader/signal_emitter.py`:
+```python
+from upstash_redis import Redis
+import json
+from datetime import datetime, timezone
+
+def emit_market_sentiment(score: float, symbol: str = "BTCUSDT"):
+    """score: -1.0 (bearish) to 1.0 (bullish). TTL 5 min."""
+    Redis.from_env().set("klip:market:sentiment", json.dumps({
+        "score": score, "symbol": symbol,
+        "ts": datetime.now(timezone.utc).isoformat()
+    }), ex=300)
+```
+
+`klip-selector/scorer.py` — sentiment weighting:
+```python
+LUXURY = ["beauty", "tech", "gadget", "premium"]
+VALUE  = ["home", "kitchen", "budget", "essentials"]
+
+def score(product: dict) -> float:
+    base = product["commission_rate"] * 0.6 + product.get("trend_score", 0.5) * 0.4
+    try:
+        sentiment = json.loads(Redis.from_env().get("klip:market:sentiment") or "{}")
+        s = float(sentiment.get("score", 0.0))
+        if s > 0.5 and product.get("category","") in LUXURY: base *= 1.3
+        elif s < -0.5 and product.get("category","") in VALUE: base *= 1.3
+    except Exception:
+        pass
+    return base
+```
+
+Spawn gate in `revenue_tracker.py`:
+```python
+def check_spawn_milestone():
+    from upstash_redis import Redis
+    entries = [json.loads(l) for l in Path("revenue.jsonl").read_text().splitlines() if l]
+    by_avatar = {}
+    for e in entries:
+        by_avatar.setdefault(e["avatar_id"], 0)
+        by_avatar[e["avatar_id"]] += e.get("commission_rate", 0) / 100 * 50  # est. sale value
+    for avatar, total in by_avatar.items():
+        if total >= 1000:
+            Redis.from_env().lpush("klip:spawn:ready", json.dumps({
+                "avatar_id": avatar, "total_pnl": total, "ts": _now()
+            }))
+```
+
+---
+
+## COMMON PATTERNS
+
+### Reading avatar social config (always avatar-specific)
+```python
+import json
+from pathlib import Path
+
+def get_social_config(avatar_id: str) -> dict:
+    path = Path(f"klip-avatar/core_v1/data/avatars/{avatar_id}/social_config.json")
+    return json.loads(path.read_text())
+    # Never read from .env for platform credentials
+```
+
+### Checking phase gate before proceeding
+```python
+from infrastructure.job_state import read_manifest
+from pathlib import Path
+
+def current_phase() -> int:
+    if not Path("revenue.jsonl").exists():     return 0
+    if not Path("jobs").exists():              return 0
+    entries = Path("revenue.jsonl").read_text().splitlines()
+    if not entries:                            return 1  # loop not proven
+    # Check if queue worker is deployed...
+    return 2  # extend as phases complete
+```
+
+### Publishing (per avatar, never shared)
+```python
+# klip-dispatch/publisher.py
+def publish_job(job_id: str, avatar_id: str, video_path: str, caption: str):
+    config = get_social_config(avatar_id)  # avatar-specific keys
+    getlate_key = config["getlate_api_key"]
+    profiles = config["platform_profiles"]  # {tiktok: "...", instagram: "..."}
+    # Use only THIS avatar's credentials — never global keys
+```
+
+---
+
+## CURSOR SESSION PROMPTS (USE THESE EXACTLY)
+
+**Phase 0 fix:**
+> "Fix the `_load_phase2()` importlib anti-pattern in `klip-avatar/core_v1/pipeline/ugc_pipeline.py`. Replace with direct imports from `scripts.first_affiliate_phase2_output`. Update `path_bootstrap.py` to add `scripts/` to sys.path. Do not change pipeline logic. Confirm `python -m pipeline.ugc_pipeline` still works."
+
+**Phase 1A (R2 + job state):**
+> "Create `infrastructure/job_state.py` with `create_manifest`, `update_manifest`, `read_manifest` functions writing to `jobs/{job_id}/manifest.json`. Create `infrastructure/storage.py` adapting `s3_store.py` from `E:\KLIPORA\KLIPORA MASTER AUTOMATION\Infrastructure\storage\s3_store.py` for Cloudflare R2. Add R2 upload and Redis push to end of `ugc_pipeline.py` main() after ship gate pass. Make R2 and Redis optional (skip if env vars missing)."
+
+**Phase 1B (HITL server):**
+> "Create `klip-dispatch/hitl_server.py` — minimal FastAPI HITL dashboard. Endpoints: GET / (dashboard HTML), GET /api/next-job, POST /api/approve/{job_id}, POST /api/reject/{job_id}, POST /api/regenerate/{job_id}. Dark glassmorphism theme, 9:16 video player. Uses vanilla JS only. Reads manifest from `jobs/` filesystem. Uses Upstash Redis for queue. Uses `publisher.publish_job()` on approve."
+
+**Phase 1C (publisher):**
+> "Create `klip-dispatch/publisher.py` by adapting `E:\KLIPORA\KLIPORA MASTER AUTOMATION\services\influencer_engine\distribution\getlate_connector.py`. Function signature: `publish_job(job_id, avatar_id, video_path, caption, platforms)`. Must read GetLate API key from `data/avatars/{avatar_id}/social_config.json` — never from .env. After each publish, call `revenue_tracker.log()`. Create `klip-dispatch/revenue_tracker.py` with `log()` and `get_summary()` functions writing to `revenue.jsonl`."
+
+**Phase 2 (queue worker):**
+> "Create `klip-avatar/worker.py` — Upstash Redis queue consumer. Polls `klip:jobs:pending` with BLPOP 10s timeout. Sets env vars, calls `create_manifest`, runs `pipeline.ugc_pipeline` as subprocess. On failure retry up to 3 times (re-push with retry_count++). On 3rd failure push to `klip:dlq`. Update manifest status at each step. Add to `railway.toml` as `klip-worker` service."
+
+**Phase 3 (selector):**
+> "Create `klip-selector/` module: `uae_filter.py` (adapt from `klipaura-core/shared/uae_content_safety.py`), `layout_router.py` (expand `E:\KLIPAURA\KLIP-SELECTOR\layout_selector.py`), `scorer.py` (commission 60% + trend 40%), `manual_feeder.py` (reads `products.csv`), `selector_worker.py` (load → filter → score → route → push top 5 to klip:jobs:pending). Test with a `products.csv` of 10 sample products."
+
+**Phase 4 (scheduler):**
+> "Create `scheduler.py` at repo root. Uses Python `schedule` library. Calls `selector_worker.run_cycle(5)` at 06:00 and 19:00 UAE (UTC+4 = 02:00 and 15:00 UTC). Calls `SystemGuardian().run_checks()` every 30 min. Respects `AUTOPILOT_MODE` env var — when '0' logs schedule but does not run cycles. Add to `railway.toml` as `klip-scheduler` service."

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta name="theme-color" content="#0f172a"/>
+  <title>__TITLE__</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    body { margin: 0; background: #0f172a; color: #e2e8f0; line-height: 1.5; }
+    .wrap { max-width: 480px; margin: 0 auto; padding: 0 1rem 2rem; }
+    .persona-brand {
+      display: flex; align-items: center; gap: 0.65rem;
+      padding: 0.75rem 0 0.25rem;
+    }
+    .persona-avatar {
+      width: 40px; height: 40px; border-radius: 999px; object-fit: cover;
+      border: 2px solid rgba(124, 58, 237, 0.45);
+    }
+    .persona-name { font-size: 0.9rem; font-weight: 600; color: #cbd5e1; }
+    .hero-img { width: 100%; aspect-ratio: 16/10; object-fit: cover; border-radius: 0 0 12px 12px; background: #1e293b; }
+    .video-wrap { margin: 1rem 0 0.5rem; }
+    h1 { font-size: 1.35rem; margin: 1rem 0 0.5rem; line-height: 1.25; }
+    .sub { opacity: 0.92; font-size: 0.95rem; margin: 0 0 1rem; }
+    ul.benefits { padding-left: 1.1rem; margin: 0 0 1.25rem; }
+    ul.benefits li { margin: 0.35rem 0; }
+    a.cta {
+      display: block; text-align: center; padding: 0.95rem 1.2rem;
+      background: linear-gradient(135deg, #7c3aed, #4f46e5); color: #fff !important;
+      text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 1.05rem;
+      box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
+    }
+    a.cta:active { transform: scale(0.98); }
+    .pay-hint { font-size: 11px; opacity: 0.55; margin-top: 0.5rem; text-align: center; }
+    .disclosure {
+      font-size: 11px; line-height: 1.45; opacity: 0.72; margin-top: 1rem;
+      padding: 0.65rem 0.75rem; border-radius: 8px; background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .fine { font-size: 11px; opacity: 0.55; margin-top: 1rem; }
+    .tag { display: inline-block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.6; margin-top: 0.75rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    __PERSONA_BRAND__
+    <img class="hero-img" src="__HERO_IMAGE__" alt="" loading="eager" decoding="async"/>
+    __VIDEO_SECTION__
+    <span class="tag">Partner offer</span>
+    <h1>__HEADLINE__</h1>
+    <p class="sub">__BODY__</p>
+    <ul class="benefits">__BENEFITS__</ul>
+    <a class="cta" href="__CTA_URL__" rel="nofollow sponsored noopener">__CTA_LABEL__</a>
+    <p class="pay-hint">Secure checkout on the retailer&apos;s site. Cards and common wallets accepted where supported.</p>
+    <p class="disclosure">__DISCLOSURE__</p>
+    <p class="fine">Presented by __AVATAR_NAME__ · __TRACKING__</p>
+  </div>
+</body>
+</html>

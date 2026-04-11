@@ -1,0 +1,48 @@
+# Influencer Engine — AI influencer content factory (executable service).
+# service_id / service_name for registry; pipeline.run for JobExecutor.
+service_id: influencer_engine
+service_name: Influencer Engine
+
+service:
+  name: influencer_engine
+  version: "0.4.0"
+  category: media
+  status: active
+
+pipeline:
+  entrypoint: pipeline.run
+  schedule: ""
+
+revenue:
+  model: fixed
+  currency: USD
+
+metrics:
+  primary_kpi: videos_created
+
+compliance:
+  risk_level: low
+
+agents:
+  - script_agent
+  - avatar_agent
+  - voice_agent
+  - video_agent
+  - publish_agent
+
+inputs:
+  - topic
+  - niche
+
+outputs:
+  - video_asset
+  - metrics
+
+config:
+  posting_frequency_per_day: 3
+  platforms:
+    - youtube_shorts
+    - instagram_reels
+    - tiktok
+
+dependencies: []

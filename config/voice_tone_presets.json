@@ -1,0 +1,11 @@
+{
+  "_comment": "Map Avatar Studio voice tone labels to ElevenLabs voice_id strings. Empty values fall back to ELEVENLABS_VOICE_ID.",
+  "presets": {
+    "Warm Male": "",
+    "Warm Female": "",
+    "Energetic": "",
+    "Deep Confident": "",
+    "Friendly": "",
+    "Professional": ""
+  }
+}

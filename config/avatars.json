@@ -1,0 +1,11 @@
+{
+  "_comment": "Avatar registry for per-job selection (avatar_id matches core_v1/data/avatars/<id>/).",
+  "default_avatar_id": "theanikaglow",
+  "avatars": {
+    "theanikaglow": {
+      "display_name": "Default persona",
+      "elevenlabs_voice_id": "",
+      "notes": "Override voice in persona.json / social_config.json under data/avatars if preferred."
+    }
+  }
+}

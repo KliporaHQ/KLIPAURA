@@ -1,0 +1,26 @@
+{
+  "avatar_id": "theanikaglow",
+  "last_updated": "2026-03-27T22:32:39Z",
+  "videos": [
+    {
+      "job_id": "test-job-001",
+      "render_mode": "ken_burns",
+      "status": "success",
+      "topic": "Test render",
+      "platform": "",
+      "duration_seconds": 28.5,
+      "processing_time_seconds": 12.3,
+      "rendered_at": "2026-03-27T22:32:27Z"
+    },
+    {
+      "job_id": "test-job-001",
+      "render_mode": "ken_burns",
+      "status": "success",
+      "topic": "Test render",
+      "platform": "",
+      "duration_seconds": 28.5,
+      "processing_time_seconds": 12.3,
+      "rendered_at": "2026-03-27T22:32:39Z"
+    }
+  ]
+}

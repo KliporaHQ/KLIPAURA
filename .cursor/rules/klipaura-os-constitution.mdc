@@ -1,0 +1,197 @@
+---
+description: KLIPAURA Master Constitution — read before any code change in this workspace
+alwaysApply: true
+---
+
+# KLIPAURA — PROJECT CONSTITUTION
+
+**Owner:** Roger Daniel (APEX)
+**Mission:** Autonomous AI affiliate content business. One avatar posts product videos daily, earns affiliate commissions, proves P&L, then spawns more avatars.
+**Active Workspace:** `E:\KLIPAURA\` (single clean repo — all work happens here)
+**Last Updated:** April 11, 2026
+
+---
+
+## IMMUTABLE ARCHITECTURE LAWS
+
+Break any of these and you restart from scratch:
+
+1. **core_v1 is sacred** — `klip-avatar/core_v1/` is verified working (ran Apr 1 2026, ship gate passed). Never rewrite it. Only extend it.
+2. **Product-first pipeline** — KLIP-SELECTOR feeds product URLs. The video engine is downstream. No product → no video. The input feeder is always Priority 1.
+3. **One avatar until $1K P&L** — Do not spawn avatar #2 until `@theanikaglow` earns $1,000 in affiliate commissions. Confirmed in `revenue.jsonl`.
+4. **Avatar identity isolation** — Each avatar has its own GetLate/Zeroino API key and account, own platform profile IDs (TikTok, Instagram, YouTube), own affiliate tracking IDs (Amazon tag, TikTok Shop ID), and own `data/avatars/{id}/social_config.json`. No shared credentials. No cross-posting. Ever.
+5. **Redis-only inter-system comms** — KLIP-SELECTOR, KLIP-AVATAR, KLIP-DISPATCH, and KLIP-TRADER communicate only via Upstash Redis queues with `klip:` namespace prefix. No direct HTTP calls between internal services.
+6. **Job filesystem is the source of truth** — Every job has `jobs/{job_id}/manifest.json`. Status, timestamps, retry count, R2 URL, and revenue data live here. No separate DB until Phase 6+.
+7. **AUTOPILOT_MODE gate** — `AUTOPILOT_MODE=0` means scheduler prints schedule but does not run. `AUTOPILOT_MODE=1` activates full autonomous loop. Default is always 0. Never hardcode 1.
+8. **KLIP-TRADER stays testnet** — `IS_TESTNET=true` until affiliate revenue is proven and live trading is explicitly approved by the owner. Never set `IS_TESTNET=false` without instruction.
+9. **Never use n8n** — All scheduling and orchestration is Python-native. n8n is permanently archived.
+10. **Phase gates are mandatory** — Do not begin a phase until the previous phase's validation gate passes. This rule was violated in every previous version. It caused every failure.
+
+---
+
+## WORKSPACE STRUCTURE
+
+```
+E:\KLIPAURA\
+├── klip-avatar/core_v1/          ← VIDEO ENGINE (DO NOT MODIFY CORE LOGIC)
+│   ├── pipeline/ugc_pipeline.py  ← MAIN PIPELINE — product URL → FINAL.mp4
+│   ├── engine/cinematic_v2/      ← 9 modules, MAD gates, Ken Burns fallback
+│   ├── services/video-render/    ← render_affiliate_split_video()
+│   ├── services/influencer_engine/rendering/wavespeed_video.py
+│   └── data/avatars/theanikaglow/
+├── klip-avatar/worker.py         ← Queue consumer (polls klip:jobs:pending)
+├── klip-selector/                ← PRODUCT DISCOVERY (feeds the pipeline)
+│   ├── scanners/                 ← amazon, tiktok_shop, manual_feeder (CSV)
+│   ├── scorer.py                 ← commission × trend × sentiment weighting
+│   ├── uae_filter.py             ← compliance gate (mandatory before queue push)
+│   ├── layout_router.py          ← category → render layout
+│   └── selector_worker.py        ← runs every 4h, pushes top 5 to queue
+├── klip-dispatch/                ← HITL + PUBLISH + REVENUE
+│   ├── hitl_server.py            ← FastAPI: approve/reject jobs
+│   ├── publisher.py              ← GetLate/Zeroino → TikTok/IG/YT
+│   └── revenue_tracker.py        ← appends to revenue.jsonl
+├── klip-trader/                  ← TRADING BOT (independent, testnet)
+│   ├── execution_engine/         ← async ccxt engine (KEEP AS-IS)
+│   └── signal_emitter.py         ← writes klip:market:sentiment to Redis
+├── klipaura-core/                ← SHARED AGENTS (CEOAgent, SystemGuardian)
+├── infrastructure/               ← queue.py, storage.py (R2), redis_client.py
+├── jobs/{job_id}/                ← PIPELINE-NATIVE FILESYSTEM
+│   ├── manifest.json             ← status, timestamps, r2_url, retry_count
+│   ├── 01_product/ … 07_final/   ← per-stage outputs
+│   └── retry.log
+├── scheduler.py                  ← AUTOPILOT: 06:00 + 19:00 UAE, 30m health
+├── revenue.jsonl                 ← append-only revenue ledger
+└── .env                          ← single source of secrets
+```
+
+---
+
+## REDIS QUEUE NAMESPACE
+
+| Queue | Direction | Purpose |
+|-------|-----------|---------|
+| `klip:jobs:pending` | SELECTOR → AVATAR | Product jobs awaiting video render |
+| `klip:hitl:pending` | AVATAR → DISPATCH | Videos awaiting human approval |
+| `klip:publish:pending` | DISPATCH → publisher | Approved videos awaiting posting |
+| `klip:market:sentiment` | TRADER → SELECTOR | Market sentiment score (-1.0 to 1.0), TTL 300s |
+| `klip:system:videos_per_day` | CEOAgent → scheduler | Daily video budget ceiling |
+| `klip:dlq` | workers → | Dead letter queue (3 failures) |
+| `klip:blacklist:{url_hash}` | DISPATCH → SELECTOR | Rejected product, TTL 7 days |
+
+---
+
+## COMPONENT STATUS
+
+| Component | Location | Status | Action |
+|-----------|----------|--------|--------|
+| `ugc_pipeline.py` | `klip-avatar/core_v1/pipeline/` | ✅ VERIFIED WORKING | KEEP, fix importlib |
+| `engine/cinematic_v2/` | `klip-avatar/core_v1/engine/` | ✅ 28 tests pass | KEEP |
+| `video-render/engine.py` | `klip-avatar/core_v1/services/` | ✅ Working | KEEP |
+| `wavespeed_video.py` | `core_v1/services/influencer_engine/` | ✅ Working | KEEP |
+| `KLIP-TRADER/execution_engine/` | `klip-trader/` | ✅ Built, testnet | KEEP AS-IS |
+| `klipaura-core` agents | `klipaura-core/src/` | ✅ Built, not wired | WIRE in Phase 4 |
+| `KLIPAURA-MASTER` dashboard | (migrating) | ⚠️ Skeleton | USE for HITL in Phase 1 |
+| `s3_store.py` | Extract from KLIPORA | ✅ Tested | EXTRACT → infrastructure/storage.py |
+| `getlate_connector.py` | Extract from KLIPORA | ✅ Written | EXTRACT → klip-dispatch/publisher.py |
+| `auto_job_scheduler.py` | Extract from KLIPORA | ⚠️ Logic good | EXTRACT skeleton → scheduler.py |
+| `uae_content_safety.py` | klipaura-core/shared | ✅ Written | EXTRACT → klip-selector/uae_filter.py |
+| `affiliate_intelligence/` | old KLIPORA | ⚠️ Stub scrapers | EXTRACT + rewrite scanners |
+| KLIP-SELECTOR | `klip-selector/` | ❌ Empty | BUILD Phase 3 |
+| R2 upload after render | Missing from core_v1 | ❌ Missing | BUILD Phase 1 |
+| Queue worker | Missing | ❌ Missing | BUILD Phase 2 |
+| HITL server | Missing | ❌ Missing | BUILD Phase 1 |
+| GetLate publish | Missing from active | ❌ Not wired | BUILD Phase 1 |
+| AUTOPILOT scheduler | Missing | ❌ Missing | BUILD Phase 4 |
+
+---
+
+## AVATAR REGISTRY
+
+| Avatar ID | Handle | Niche | Voice ID | Layout | Status |
+|-----------|--------|-------|----------|--------|--------|
+| `theanikaglow` | @theanikaglow | Beauty/Lifestyle (Dubai) | (in .env) | full_face_overlay | ACTIVE |
+| `kaelvancereview` | @kaelvancereview | Tech/Gadgets | TBD | beebom_split | LOCKED — spawn at $1K |
+| `ariavedaai` | @aria.vedaai | Wellness/Fitness | TBD | full_face_overlay | LOCKED — spawn at $2K |
+
+**Each avatar requires before activation:**
+- [ ] GetLate/Zeroino account created (separate from all other avatars)
+- [ ] TikTok, Instagram, YouTube profiles live
+- [ ] Amazon Associates tag registered
+- [ ] `data/avatars/{id}/persona.json` populated
+- [ ] `data/avatars/{id}/social_config.json` populated with own credentials
+- [ ] Owner confirms activation in writing
+
+---
+
+## TECHNOLOGY STACK (FINAL — DO NOT DEVIATE)
+
+| Layer | Choice | Reason |
+|-------|--------|--------|
+| Video pipeline | core_v1 (Python, FFmpeg) | Verified working Apr 1 |
+| Script generation | Groq llama-3.1-70b-versatile | Fast, cheap |
+| Voice | ElevenLabs (eleven_multilingual_v2) | Replaced WaveSpeed TTS |
+| Video generation | WaveSpeed I2V (image-to-video) | Not T2V — I2V only |
+| Queue | Upstash Redis (klip: namespace) | Already configured |
+| Storage | Cloudflare R2 (boto3) | s3_store.py ready |
+| Publishing | GetLate / Zeroino | Per-avatar accounts |
+| Scheduling | Python `schedule` library | No n8n, no cron infra |
+| HITL dashboard | FastAPI + vanilla JS | No React overhead |
+| Compute | Railway (3 services) | Already in use |
+| Revenue tracking | `revenue.jsonl` (append-only) | Simple, no DB |
+| Trading | ccxt async (testnet) | KLIP-TRADER unchanged |
+| Orchestration | Python workers | n8n permanently archived |
+
+---
+
+## PHASE PLAN (READ BEFORE EVERY SESSION)
+
+| Phase | Goal | Validation Gate | Days |
+|-------|------|----------------|------|
+| **0** | Clean workspace, copy verified components | `ugc_pipeline.py` runs with test URL | 1 |
+| **1** | R2 upload + HITL server + GetLate publish + revenue.jsonl | Manually run pipeline → HITL shows video → APPROVE → TikTok posts → revenue.jsonl has 1 entry | 3 |
+| **2** | Queue worker (klip-avatar/worker.py) + POST /api/jobs | `POST /api/jobs` → 5 min later video in HITL, no terminal needed | 2 |
+| **3** | KLIP-SELECTOR v1 (CSV-based manual feeder) | `python klip-selector/selector_worker.py` → 5 jobs in queue → all process automatically | 5 |
+| **4** | AUTOPILOT scheduler + CEOAgent budget gate | 48h unattended → 20 videos in HITL queue | 2 |
+| **5** | KLIP-TRADER sentiment signal + revenue milestones + spawn gate | $1K P&L reached → Telegram alert fires | 7 |
+
+**Current Phase:** Determine by checking which validation gate has most recently passed.
+
+---
+
+## COST BUDGET
+
+| Service | Monthly Cost | Notes |
+|---------|-------------|-------|
+| Railway (3 services) | ~$15 | api + worker + scheduler |
+| Cloudflare R2 | ~$2 | First 10GB free |
+| WaveSpeed I2V | ~$8 | 60 videos × $0.13 |
+| ElevenLabs | ~$2 | 60 videos × $0.03 |
+| Groq | ~$0 | Free tier |
+| Upstash Redis | ~$0 | Free tier |
+| **Total** | **~$27/month** | Break-even = 2–3 sales |
+
+---
+
+## WHAT TO NEVER DO
+
+- Never run `git push --force` on `main`
+- Never set `IS_TESTNET=false` on KLIP-TRADER without explicit instruction
+- Never set `AUTOPILOT_MODE=1` before Phase 4 validation gate passes
+- Never import anything from `E:\KLIPORA\`, `E:\KLIPAURA-old-full-backup\`, `E:\KLIPAURA BACKUP\`, `E:\ARCHIVE_AND_LEGACY\` — those are archive only
+- Never build a new feature while a phase validation gate is incomplete
+- Never hardcode avatar credentials — always read from `data/avatars/{id}/social_config.json`
+- Never cross-post — each avatar's publisher reads only its own social_config.json
+- Never use WaveSpeed T2V (text-to-video) — only I2V (image-to-video)
+- Never use WaveSpeed TTS — only ElevenLabs
+- Never recreate infrastructure that already exists in `klipaura-core/` — import from it
+
+---
+
+## HOW TO START EVERY CURSOR SESSION
+
+1. Read this file (auto-loaded via alwaysApply)
+2. Check `jobs/` folder — any manifests with `status: FAILED`? Fix those first
+3. Check `revenue.jsonl` — what's the current P&L? Which phase does that unlock?
+4. Check which phase validation gate was last passed
+5. Work only on tasks for the current phase
+6. Do not move to next phase until validation gate passes

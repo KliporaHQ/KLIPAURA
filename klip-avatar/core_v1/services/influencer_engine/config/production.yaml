@@ -1,0 +1,27 @@
+# Influencer Engine — Production configuration
+# Modes: development | staging | production
+
+environment: production
+
+worker_count: 2
+scheduler_interval: 600   # seconds (10 min)
+
+render_backend: mock     # mock | local | external
+distribution_backends:
+  - youtube_shorts
+  - tiktok
+  - instagram
+  - x
+
+analytics_interval: 300  # seconds
+strategy_refresh_interval: 3600  # seconds
+
+# Scaling
+videos_per_day: 10
+max_concurrent_jobs: 3
+avatar_scaling_limit: 5
+platform_rate_limit: 10
+
+# Resilience
+retry_max_attempts: 3
+retry_delay_seconds: 60

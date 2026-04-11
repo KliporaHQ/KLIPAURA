@@ -1,0 +1,1451 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KLIPAURA Mission Control</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100">
+  <div class="mx-auto max-w-7xl px-4 py-6">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <div class="text-xs tracking-widest text-slate-400">KLIPAURA</div>
+        <h1 class="text-2xl font-semibold">Mission Control</h1>
+        <div id="sub" class="mt-1 text-sm text-slate-400"></div>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button data-tab="ops" class="tab-btn rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm">Ops</button>
+        <button data-tab="queue" class="tab-btn rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm">Queue</button>
+        <button data-tab="jobs" class="tab-btn rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm">Jobs</button>
+        <button data-tab="hitl" class="tab-btn rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm">HITL</button>
+        <button data-tab="avatars" class="tab-btn rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm">Avatars</button>
+        <button data-tab="analytics" class="tab-btn rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm">Analytics</button>
+        <button data-tab="settings" class="tab-btn rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm">Settings</button>
+      </div>
+    </div>
+
+    <div id="toast" class="mt-4 hidden rounded-xl border border-slate-800 bg-slate-900 p-3 text-sm"></div>
+
+    <div id="ops" class="tab mt-6"></div>
+    <div id="queue" class="tab mt-6 hidden"></div>
+    <div id="jobs" class="tab mt-6 hidden"></div>
+    <div id="hitl" class="tab mt-6 hidden"></div>
+    <div id="avatars" class="tab mt-6 hidden"></div>
+    <div id="analytics" class="tab mt-6 hidden"></div>
+    <div id="settings" class="tab mt-6 hidden"></div>
+  </div>
+
+  <script>
+    const state = {
+      ops: null,
+      credits: null,
+      queueSummary: null,
+      queueJobs: [],
+      queueSelected: new Set(),
+      templates: [],
+      avatars: [],
+      selectedAvatarId: null,
+      selectedJobId: null,
+      hitlJob: null,
+      adminKey: localStorage.getItem('mc_admin_key') || '',
+      opsKey: localStorage.getItem('mc_ops_key') || '',
+      showAdminKey: false,
+      showOpsKey: false,
+      analytics: null,
+      chartOutcomes: null,
+      chartTemplates: null,
+    };
+
+    function qs(sel) { return document.querySelector(sel); }
+    function qsa(sel) { return Array.from(document.querySelectorAll(sel)); }
+
+    function toast(msg, kind='info') {
+      const el = qs('#toast');
+      el.classList.remove('hidden');
+      el.className = 'mt-4 rounded-xl border p-3 text-sm ' + (
+        kind === 'error'
+          ? 'border-rose-900/60 bg-rose-950/40 text-rose-100'
+          : kind === 'ok'
+            ? 'border-emerald-900/60 bg-emerald-950/40 text-emerald-100'
+            : 'border-slate-800 bg-slate-900 text-slate-100'
+      );
+      el.textContent = msg;
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => { el.classList.add('hidden'); }, 6000);
+    }
+
+    function fmt(n) {
+      if (n == null) return '—';
+      try { return String(n); } catch { return '—'; }
+    }
+
+    function htmlesc(s) {
+      return String(s == null ? '' : s)
+        .replaceAll('&','&amp;')
+        .replaceAll('<','&lt;')
+        .replaceAll('>','&gt;')
+        .replaceAll('"','&quot;')
+        .replaceAll("'",'&#039;');
+    }
+
+    async function api(path, opts={}) {
+      const headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+      if (opts.admin) {
+        if (!state.adminKey) throw new Error('ADMIN key missing (Settings → Admin key)');
+        headers['X-Admin-Key'] = state.adminKey;
+      }
+      if (opts.ops) {
+        if (!state.opsKey) throw new Error('OPS key missing (Settings → Ops key)');
+        headers['X-Ops-Key'] = state.opsKey;
+      }
+      const res = await fetch(path, Object.assign({}, opts, { headers }));
+      const text = await res.text();
+      let json = null;
+      try { json = text ? JSON.parse(text) : null; } catch { json = null; }
+      if (!res.ok) {
+        const detail = json && json.detail ? (typeof json.detail === 'string' ? json.detail : JSON.stringify(json.detail)) : (text || ('HTTP ' + res.status));
+        const err = new Error(detail);
+        err.status = res.status;
+        err.body = json || text;
+        throw err;
+      }
+      return json;
+    }
+
+    function setTab(name) {
+      qsa('.tab').forEach(el => el.classList.add('hidden'));
+      qs('#' + name).classList.remove('hidden');
+      qsa('.tab-btn').forEach(b => {
+        const active = b.getAttribute('data-tab') === name;
+        b.classList.toggle('bg-slate-800', active);
+        b.classList.toggle('bg-slate-900', !active);
+        b.classList.toggle('border-slate-700', active);
+        b.classList.toggle('border-slate-800', !active);
+      });
+    }
+
+    qsa('.tab-btn').forEach(b => b.addEventListener('click', () => {
+      const name = b.getAttribute('data-tab');
+      setTab(name);
+      if (name === 'analytics' && state.adminKey) loadAnalytics().catch(() => {});
+    }));
+
+    async function loadOps() {
+      state.ops = await api('/api/ops/summary', { method: 'GET' });
+      renderOps();
+      renderJobs();
+    }
+
+    async function loadQueue() {
+      state.queueSummary = await api('/api/queue/summary', { method: 'GET', admin: true });
+      const j = await api('/api/queue/list?limit=80', { method: 'GET', admin: true });
+      state.queueJobs = (j && j.jobs) ? j.jobs : [];
+      renderQueue();
+    }
+
+    async function loadCredits() {
+      state.credits = await api('/api/providers/credits', { method: 'GET', admin: true });
+      renderOps();
+    }
+
+    async function loadTemplates() {
+      try {
+        const j = await api('/api/templates', { method: 'GET' });
+        state.templates = (j && j.templates) ? j.templates : [];
+      } catch {
+        state.templates = [];
+      }
+    }
+
+    async function loadAvatars() {
+      const j = await api('/api/avatars', { method: 'GET' });
+      state.avatars = (j && j.avatars) ? j.avatars : [];
+      if (!state.selectedAvatarId && state.avatars.length) state.selectedAvatarId = state.avatars[0].avatar_id;
+      renderAvatars();
+      renderJobs();
+    }
+
+    function badge(ok, label) {
+      return `<span class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${ok ? 'border-emerald-800/60 bg-emerald-950/50 text-emerald-100' : 'border-amber-800/60 bg-amber-950/40 text-amber-100'}">${htmlesc(label)}</span>`;
+    }
+
+    function card(title, inner) {
+      return `<div class="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">` +
+        `<div class="mb-3 text-sm font-semibold">${htmlesc(title)}</div>` + inner + `</div>`;
+    }
+
+    function renderQueue() {
+      const el = qs('#queue');
+      if (!state.adminKey) {
+        el.innerHTML = card('Queue', `<div class="text-sm text-slate-300">Enter your Admin password in <span class="text-slate-200">Settings</span> to access queue controls.</div>`);
+        return;
+      }
+      const tplName = (id) => {
+        const key = (id || '').toString().trim();
+        if (!key) return '—';
+        const t = (state.templates || []).find(x => (x && x.id) === key);
+        return t ? (t.name || t.id || key) : key;
+      };
+      const s = state.queueSummary || {};
+      const q = (s.queues || {});
+      const c = (s.status_counts_recent || {});
+      const globalPaused = !!s.global_paused;
+
+      const cards = [
+        { k: 'Queued', v: fmt(c.QUEUED) },
+        { k: 'Processing', v: fmt(c.PROCESSING) },
+        { k: 'Pending review', v: fmt(q.hitl_pending) },
+        { k: 'Published', v: fmt(c.PUBLISHED) },
+      ].map(x => `<div class="rounded-2xl border border-slate-800 bg-slate-950/40 p-4"><div class="text-2xl font-semibold">${htmlesc(x.v)}</div><div class="mt-1 text-xs tracking-widest text-slate-400">${htmlesc(x.k)}</div></div>`).join('');
+
+      const toggleBtn = globalPaused
+        ? `<button class="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950" onclick="queueResumeGlobal()">Resume worker</button>`
+        : `<button class="rounded-xl bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-950" onclick="queuePauseGlobal()">Pause worker</button>`;
+
+      const rows = (state.queueJobs || []).map(job => {
+        const id = job.job_id;
+        const checked = state.queueSelected.has(id);
+        const st = (job.status || '—');
+        const prod = (job.product_url || '').toString();
+        const tpl = tplName(job.template || job.template_id || '');
+        const actions = `
+          <div class="flex flex-wrap gap-2">
+            <button class="rounded-xl border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs" onclick="queuePauseJob('${htmlesc(id)}')">Pause</button>
+            <button class="rounded-xl border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs" onclick="queueResumeJob('${htmlesc(id)}')">Resume</button>
+            <button class="rounded-xl border border-rose-900/60 bg-rose-950/30 px-3 py-1.5 text-xs text-rose-100" onclick="queueDeleteJob('${htmlesc(id)}')">Delete</button>
+          </div>
+        `;
+        return `<tr class="border-t border-slate-800/70">
+          <td class="py-2 pr-2"><input type="checkbox" ${checked ? 'checked' : ''} onchange="queueToggleSelect('${htmlesc(id)}', this.checked)" /></td>
+          <td class="py-2 pr-2 font-mono text-xs text-slate-200">${htmlesc(id)}</td>
+          <td class="py-2 pr-2 text-sm">${htmlesc(st)}</td>
+          <td class="py-2 pr-2 text-xs text-slate-300">${htmlesc(prod)}</td>
+          <td class="py-2 pr-2 text-sm">${htmlesc(tpl)}</td>
+          <td class="py-2">${actions}</td>
+        </tr>`;
+      }).join('');
+
+      const inner = `
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap gap-2">
+            ${badge(!globalPaused, globalPaused ? 'Worker paused' : 'Worker running')}
+            ${badge(true, 'Pending: ' + fmt(q.jobs_pending))}
+            ${badge(true, 'Paused: ' + fmt(q.jobs_paused))}
+            ${badge(true, 'DLQ: ' + fmt(q.dlq))}
+          </div>
+          <div class="flex flex-wrap gap-2">
+            ${toggleBtn}
+            <button class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="loadQueue()">Refresh</button>
+          </div>
+        </div>
+
+        <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">${cards}</div>
+
+        <div class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="text-sm font-semibold">Jobs</div>
+            <div class="flex flex-wrap gap-2">
+              <button class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="queueBulkDeleteSelected()">Delete selected</button>
+              <button class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="queueRetryFailed24h()">Retry failed (24h)</button>
+            </div>
+          </div>
+          <div class="mt-3 overflow-x-auto">
+            <table class="w-full min-w-[920px]">
+              <thead>
+                <tr class="text-left text-xs tracking-widest text-slate-400">
+                  <th class="pb-2 pr-2">SEL</th>
+                  <th class="pb-2 pr-2">ID</th>
+                  <th class="pb-2 pr-2">STATUS</th>
+                  <th class="pb-2 pr-2">PRODUCT</th>
+                  <th class="pb-2 pr-2">TEMPLATE</th>
+                  <th class="pb-2">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>${rows || `<tr class="border-t border-slate-800/70"><td colspan="6" class="py-4 text-sm text-slate-400">No jobs found.</td></tr>`}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      el.innerHTML = inner;
+    }
+
+    function queueToggleSelect(jobId, checked) {
+      if (checked) state.queueSelected.add(jobId);
+      else state.queueSelected.delete(jobId);
+    }
+
+    async function queuePauseGlobal() {
+      try {
+        await api('/api/queue/pause/global', { method: 'POST', body: '{}', admin: true });
+        toast('Worker paused', 'ok');
+        await loadQueue();
+      } catch (e) { toast(e.message || String(e), 'error'); }
+    }
+
+    async function queueResumeGlobal() {
+      try {
+        await api('/api/queue/resume/global', { method: 'POST', body: '{}', admin: true });
+        toast('Worker resumed', 'ok');
+        await loadQueue();
+      } catch (e) { toast(e.message || String(e), 'error'); }
+    }
+
+    async function queuePauseJob(jobId) {
+      try {
+        await api('/api/queue/pause/' + encodeURIComponent(jobId), { method: 'POST', body: '{}', admin: true });
+        toast('Paused ' + jobId, 'ok');
+        await loadQueue();
+      } catch (e) { toast(e.message || String(e), 'error'); }
+    }
+
+    async function queueResumeJob(jobId) {
+      try {
+        await api('/api/queue/resume/' + encodeURIComponent(jobId), { method: 'POST', body: '{}', admin: true });
+        toast('Resumed ' + jobId, 'ok');
+        await loadQueue();
+      } catch (e) { toast(e.message || String(e), 'error'); }
+    }
+
+    async function queueDeleteJob(jobId) {
+      try {
+        if (!confirm('Delete job ' + jobId + '? This removes it from queues and deletes artifacts best-effort.')) return;
+        await api('/api/queue/' + encodeURIComponent(jobId), { method: 'DELETE', admin: true });
+        state.queueSelected.delete(jobId);
+        toast('Deleted ' + jobId, 'ok');
+        await loadQueue();
+      } catch (e) { toast(e.message || String(e), 'error'); }
+    }
+
+    async function queueBulkDeleteSelected() {
+      try {
+        const ids = Array.from(state.queueSelected);
+        if (!ids.length) { toast('No jobs selected', 'info'); return; }
+        if (!confirm('Delete ' + ids.length + ' job(s)?')) return;
+        await api('/api/queue/bulk-delete', { method: 'POST', body: JSON.stringify({ job_ids: ids }), admin: true });
+        state.queueSelected = new Set();
+        toast('Bulk delete done', 'ok');
+        await loadQueue();
+      } catch (e) { toast(e.message || String(e), 'error'); }
+    }
+
+    async function queueRetryFailed24h() {
+      try {
+        if (!confirm('Retry failed jobs from the last 24 hours?')) return;
+        const j = await api('/api/queue/retry-failed', { method: 'POST', body: JSON.stringify({ hours: 24, limit: 50 }), admin: true });
+        toast('Retried: ' + fmt((j && j.requeued) ? j.requeued.length : 0), 'ok');
+        await loadQueue();
+      } catch (e) { toast(e.message || String(e), 'error'); }
+    }
+
+    function destroyMcChart(ref) {
+      if (ref && typeof ref.destroy === 'function') {
+        try { ref.destroy(); } catch (e) { /* ignore */ }
+      }
+      return null;
+    }
+
+    async function loadAnalytics() {
+      try {
+        state.analytics = await api('/api/analytics/summary', { method: 'GET', admin: true });
+        renderAnalytics();
+      } catch (e) {
+        state.analytics = null;
+        renderAnalytics();
+        toast(e.message || String(e), 'error');
+      }
+    }
+
+    function renderAnalytics() {
+      const el = qs('#analytics');
+      if (!state.adminKey) {
+        el.innerHTML = card('Analytics', `<div class="text-sm text-slate-300">Enter your Admin password in <span class="text-slate-200">Settings</span> to view analytics.</div>`);
+        return;
+      }
+      const a = state.analytics;
+      if (!a || !a.ok) {
+        el.innerHTML = card('Analytics', `<div class="text-sm text-slate-400">Load data with Refresh.</div>`);
+        return;
+      }
+
+      const note = (a.note || '').toString();
+      const og = a.outcome_groups || {};
+      const rows = (a.by_template || []).map(r => {
+        return `<tr class="border-t border-slate-800/70">
+          <td class="py-2 pr-2 text-sm font-medium text-slate-200">${htmlesc(r.template_name || r.template_id)}</td>
+          <td class="py-2 pr-2 font-mono text-xs">${fmt(r.jobs_total)}</td>
+          <td class="py-2 pr-2 font-mono text-xs">${fmt(r.published)}</td>
+          <td class="py-2 pr-2 font-mono text-xs">${fmt(r.publish_rate_pct)}%</td>
+          <td class="py-2 pr-2 font-mono text-xs">${fmt(r.approval_rate_pct)}%</td>
+          <td class="py-2 pr-2 font-mono text-xs">${fmt(r.ledger_lines)}</td>
+          <td class="py-2 font-mono text-xs">${fmt(r.ledger_post_url_rate_pct)}%</td>
+        </tr>`;
+      }).join('') || `<tr><td colspan="7" class="py-4 text-sm text-slate-400">No job manifests found.</td></tr>`;
+
+      el.innerHTML = `
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="text-sm text-slate-400">Scanned <span class="text-slate-200">${fmt(a.jobs_scanned)}</span> job manifests</div>
+          <button class="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm" onclick="loadAnalytics()">Refresh</button>
+        </div>
+        <p class="mt-2 text-xs leading-relaxed text-slate-500">${htmlesc(note)}</p>
+        <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          ${card('Job outcomes (grouped)', `
+            <div class="relative mx-auto max-h-[280px] max-w-md">
+              <canvas id="mc_chart_outcomes"></canvas>
+            </div>
+          `)}
+          ${card('Template performance', `
+            <p class="mb-2 text-xs text-slate-500">Bars: publish rate (% of jobs). Line: ledger post-URL rate (proxy for link live).</p>
+            <div class="relative max-h-[320px]">
+              <canvas id="mc_chart_templates"></canvas>
+            </div>
+          `)}
+        </div>
+        <div class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+          <div class="mb-2 text-sm font-semibold">Per-template metrics</div>
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[880px] text-left text-sm">
+              <thead>
+                <tr class="text-xs tracking-widest text-slate-400">
+                  <th class="pb-2 pr-2">Template</th>
+                  <th class="pb-2 pr-2">Jobs</th>
+                  <th class="pb-2 pr-2">Published</th>
+                  <th class="pb-2 pr-2">Publish %</th>
+                  <th class="pb-2 pr-2">Approval %</th>
+                  <th class="pb-2 pr-2">Ledger lines</th>
+                  <th class="pb-2">Post URL %</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      state.chartOutcomes = destroyMcChart(state.chartOutcomes);
+      state.chartTemplates = destroyMcChart(state.chartTemplates);
+
+      if (typeof Chart === 'undefined') {
+        return;
+      }
+
+      const labelsOg = [];
+      const dataOg = [];
+      const colors = ['#22c55e', '#38bdf8', '#eab308', '#f43f5e', '#a855f7', '#64748b'];
+      const keysOrder = ['PUBLISHED', 'IN_FLIGHT', 'MANUAL_PUBLISH_REQUIRED', 'REJECTED', 'FAILED', 'OTHER'];
+      const bgOg = [];
+      keysOrder.forEach((k, i) => {
+        const v = Number(og[k] || 0);
+        if (v > 0) {
+          labelsOg.push(k.replace(/_/g, ' '));
+          dataOg.push(v);
+          bgOg.push(colors[i % colors.length]);
+        }
+      });
+      const co = qs('#mc_chart_outcomes');
+      if (co && labelsOg.length) {
+        state.chartOutcomes = new Chart(co, {
+          type: 'doughnut',
+          data: {
+            labels: labelsOg,
+            datasets: [{ data: dataOg, backgroundColor: bgOg, borderWidth: 0 }],
+          },
+          options: {
+            plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1', font: { size: 11 } } } },
+            maintainAspectRatio: true,
+          },
+        });
+      }
+
+      const bt = a.by_template || [];
+      const labelsT = bt.map(r => (r.template_name || r.template_id || '').toString().slice(0, 28));
+      const pubPct = bt.map(r => Number(r.publish_rate_pct || 0));
+      const urlPct = bt.map(r => Number(r.ledger_post_url_rate_pct || 0));
+      const ct = qs('#mc_chart_templates');
+      if (ct && labelsT.length) {
+        state.chartTemplates = new Chart(ct, {
+          type: 'bar',
+          data: {
+            labels: labelsT,
+            datasets: [
+              {
+                type: 'bar',
+                label: 'Publish % (jobs)',
+                data: pubPct,
+                backgroundColor: 'rgba(56, 189, 248, 0.55)',
+                borderColor: 'rgba(56, 189, 248, 0.9)',
+                borderWidth: 1,
+                yAxisID: 'y',
+              },
+              {
+                type: 'line',
+                label: 'Post URL % (ledger)',
+                data: urlPct,
+                borderColor: '#a78bfa',
+                backgroundColor: 'rgba(167, 139, 250, 0.2)',
+                yAxisID: 'y',
+                tension: 0.25,
+                pointRadius: 3,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 0, font: { size: 10 } }, grid: { color: 'rgba(148,163,184,0.12)' } },
+              y: { min: 0, max: 100, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.12)' } },
+            },
+            plugins: {
+              legend: { labels: { color: '#cbd5e1', font: { size: 11 } } },
+            },
+          },
+        });
+      }
+    }
+
+    function renderOps() {
+      const el = qs('#ops');
+      const o = state.ops || {};
+      const q = o.queues || {};
+      const w = o.worker || {};
+      const prov = o.providers || {};
+      const keys = (prov.api_keys_present || {});
+      const ff = (prov.ffmpeg || {});
+      const budget = o.budget || {};
+      const rev = o.revenue || {};
+
+      const workerOnline = !!(w && w.state);
+      const workerLabel = workerOnline ? ('Worker ' + String(w.state)) : 'Worker offline';
+
+      qs('#sub').innerHTML = `Redis: <span class="text-slate-200">${o.redis_ok ? 'connected' : 'not configured'}</span> · <span class="text-slate-200">${htmlesc(workerLabel)}</span> · R2: <span class="text-slate-200">${o.r2_configured ? 'on' : 'off'}</span>`;
+
+      const pills = [
+        badge(!!o.redis_ok, 'Redis'),
+        badge(workerOnline, workerLabel),
+        badge(!!o.r2_configured, 'R2'),
+        badge(!!ff.on_path, ff.on_path ? 'FFmpeg' : 'FFmpeg missing'),
+        badge(!!keys.groq, keys.groq ? 'Groq key' : 'Groq key missing'),
+        badge(!!keys.elevenlabs, keys.elevenlabs ? 'ElevenLabs key' : 'ElevenLabs key missing'),
+        badge(!!keys.wavespeed, keys.wavespeed ? 'WaveSpeed key' : 'WaveSpeed key missing'),
+      ].join(' ');
+
+      const stats = [
+        { k: 'Jobs pending', v: fmt(q.jobs_pending) },
+        { k: 'HITL pending', v: fmt(q.hitl_pending) },
+        { k: 'DLQ', v: fmt(q.dlq) },
+        { k: 'Videos today', v: (budget.max_daily != null ? `${fmt(budget.count_today)}/${fmt(budget.max_daily)}` : '—') },
+        { k: 'Revenue entries', v: fmt(rev.total_entries) },
+        { k: 'Est USD sum', v: fmt(rev.est_revenue_usd_sum) },
+      ].map(s => `<div class="rounded-2xl border border-slate-800 bg-slate-950/40 p-4"><div class="text-2xl font-semibold">${htmlesc(s.v)}</div><div class="mt-1 text-xs tracking-widest text-slate-400">${htmlesc(s.k)}</div></div>`).join('');
+
+      const hint = o.pipeline_hint ? `<div class="mb-4 rounded-2xl border border-sky-900/50 bg-sky-950/30 p-4 text-sm text-sky-100">${htmlesc(o.pipeline_hint)}</div>` : '';
+
+      const credits = state.credits || {};
+      const eleven = (credits && credits.elevenlabs) ? credits.elevenlabs : null;
+      const creditsInner = `
+        <div class="grid grid-cols-1 gap-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="text-sm text-slate-300">Balances are best-effort; some providers don’t expose credits via API.</div>
+            <button class="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm" onclick="loadCredits()">Check credits</button>
+          </div>
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+              <div class="text-xs tracking-widest text-slate-400">ELEVENLABS</div>
+              <div class="mt-2 text-sm text-slate-200">${eleven && eleven.ok ? 'Connected' : 'Not available'}</div>
+              <div class="mt-1 text-xs text-slate-400">${eleven && eleven.ok ? ('Characters: ' + fmt(eleven.character_count) + ' / ' + fmt(eleven.character_limit)) : (eleven && eleven.error ? htmlesc(eleven.error) : 'Set ELEVENLABS_API_KEY to enable')}</div>
+            </div>
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+              <div class="text-xs tracking-widest text-slate-400">GROQ + WAVESPEED</div>
+              <div class="mt-2 text-sm text-slate-200">Not integrated</div>
+              <div class="mt-1 text-xs text-slate-400">We can add provider-specific checks if the APIs expose credit endpoints.</div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const workerInner = `
+        <div class="grid grid-cols-1 gap-2 text-sm">
+          <div><span class="text-slate-400">State:</span> <span class="text-slate-200">${htmlesc(workerOnline ? String(w.state) : 'OFFLINE')}</span></div>
+          <div><span class="text-slate-400">Job:</span> <span class="font-mono text-xs text-slate-200">${htmlesc(w && w.job_id ? String(w.job_id) : '—')}</span></div>
+          <div><span class="text-slate-400">Last seen:</span> <span class="text-slate-200">${htmlesc(w && w.ts ? String(w.ts) : '—')}</span></div>
+          <div><span class="text-slate-400">Last error:</span> <span class="text-slate-200">${htmlesc(w && w.error ? String(w.error) : '—')}</span></div>
+        </div>
+      `;
+
+      const recent = (o.recent_jobs || []).map(j => {
+        const vid = j.has_video ? `<a class="text-sky-300 hover:underline" href="/api/jobs/${encodeURIComponent(j.job_id)}/video" target="_blank" rel="noopener noreferrer">Video</a>` : '<span class="text-slate-400">—</span>';
+        const man = `<button class="text-sky-300 hover:underline" onclick="openManifest('${htmlesc(j.job_id)}')">Manifest</button>`;
+        return `<tr class="border-t border-slate-800/70">
+          <td class="py-2 pr-2 font-mono text-xs text-slate-200">${htmlesc(j.job_id)}</td>
+          <td class="py-2 pr-2 text-sm">${htmlesc(j.status || '—')}</td>
+          <td class="py-2 pr-2 text-sm">${vid}</td>
+          <td class="py-2 pr-2 text-sm">${man}</td>
+          <td class="py-2 text-xs text-slate-400">${htmlesc(j.updated_at || '')}</td>
+        </tr>`;
+      }).join('') || `<tr><td class="py-3 text-sm text-slate-400" colspan="5">No jobs yet.</td></tr>`;
+
+      el.innerHTML = `
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap gap-2">${pills}</div>
+          <div class="flex gap-2">
+            <button class="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm" onclick="refreshAll()">Refresh</button>
+          </div>
+        </div>
+        <div class="mt-4">${hint}</div>
+        <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">${stats}</div>
+        <div class="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          ${card('Worker status', workerInner)}
+          ${card('Credits / usage', creditsInner)}
+        </div>
+        <div class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+          <div class="mb-2 text-sm font-semibold">Recent jobs</div>
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[760px]">
+              <thead>
+                <tr class="text-left text-xs tracking-widest text-slate-400">
+                  <th class="pb-2 pr-2">JOB</th>
+                  <th class="pb-2 pr-2">STATUS</th>
+                  <th class="pb-2 pr-2">VIDEO</th>
+                  <th class="pb-2 pr-2">DETAIL</th>
+                  <th class="pb-2">UPDATED</th>
+                </tr>
+              </thead>
+              <tbody>${recent}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderJobs() {
+      const el = qs('#jobs');
+      const avatarsOpt = state.avatars.map(a => `<option value="${htmlesc(a.avatar_id)}">${htmlesc(a.avatar_id)}</option>`).join('');
+      const templatesOpt = (state.templates || []).map(t => `<option value="${htmlesc(t.id)}">${htmlesc(t.name || t.id)}</option>`).join('');
+
+      const o = state.ops || {};
+      const jobs = (o.recent_jobs || []);
+
+      const rows = jobs.map(j => {
+        const vid = j.has_video ? `<a class="text-sky-300 hover:underline" href="/api/jobs/${encodeURIComponent(j.job_id)}/video" target="_blank" rel="noopener noreferrer">Open</a>` : '<span class="text-slate-400">—</span>';
+        const man = `<button class="rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-1 text-xs" onclick="openManifest('${htmlesc(j.job_id)}')">Manifest</button>`;
+        return `<tr class="border-t border-slate-800/70">
+          <td class="py-2 pr-2 font-mono text-xs">${htmlesc(j.job_id)}</td>
+          <td class="py-2 pr-2 text-sm">${htmlesc(j.status || '—')}</td>
+          <td class="py-2 pr-2 text-sm">${vid}</td>
+          <td class="py-2 pr-2 text-sm">${man}</td>
+          <td class="py-2 text-xs text-slate-400">${htmlesc(j.updated_at || '')}</td>
+        </tr>`;
+      }).join('') || `<tr><td class="py-3 text-sm text-slate-400" colspan="5">No jobs yet.</td></tr>`;
+
+      el.innerHTML = `
+        <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          ${card('Create job (affiliate link → final video)', `
+            <div class="grid grid-cols-1 gap-3">
+              <div>
+                <div class="text-xs tracking-widest text-slate-400">PRODUCT URL (affiliate link)</div>
+                <input id="job_product_url" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="https://..." />
+              </div>
+              <div>
+                <div class="text-xs tracking-widest text-slate-400">PRODUCT PAGE URL (optional override)</div>
+                <input id="job_product_page_url" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="https://..." />
+              </div>
+              <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">AVATAR</div>
+                  <select id="job_avatar" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm">${avatarsOpt}</select>
+                </div>
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">ELEVENLABS VOICE ID (optional)</div>
+                  <input id="job_voice" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="21m00Tcm4TlvDq8ikWAM" />
+                </div>
+              </div>
+              <div>
+                <div class="text-xs tracking-widest text-slate-400">TEMPLATE</div>
+                <select id="job_template" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm">
+                  <option value="">Default</option>
+                  ${templatesOpt}
+                </select>
+              </div>
+              <div>
+                <div class="text-xs tracking-widest text-slate-400">IMAGE URLS (optional, comma-separated; for bot-challenge sites)</div>
+                <textarea id="job_images" class="mt-1 h-20 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="https://img...jpg, https://img...jpg"></textarea>
+              </div>
+              <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">TITLE (optional)</div>
+                  <input id="job_title" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">CTA LINE (optional override)</div>
+                  <input id="job_cta" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="Get yours - Link in bio | ..." />
+                </div>
+              </div>
+              <div>
+                <div class="text-xs tracking-widest text-slate-400">BULLETS (optional, one per line)</div>
+                <textarea id="job_bullets" class="mt-1 h-24 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="Bullet 1\nBullet 2"></textarea>
+              </div>
+              <div>
+                <div class="text-xs tracking-widest text-slate-400">SCRIPT SYSTEM OVERRIDE (optional)</div>
+                <textarea id="job_sys" class="mt-1 h-28 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="If set, replaces the default UGC script system prompt"></textarea>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button class="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950" onclick="createJob()">Enqueue job</button>
+                <button class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="refreshAll()">Refresh</button>
+              </div>
+            </div>
+          `)}
+
+          ${card('Recent jobs', `
+            <div class="overflow-x-auto">
+              <table class="w-full min-w-[760px]">
+                <thead>
+                  <tr class="text-left text-xs tracking-widest text-slate-400">
+                    <th class="pb-2 pr-2">JOB</th>
+                    <th class="pb-2 pr-2">STATUS</th>
+                    <th class="pb-2 pr-2">VIDEO</th>
+                    <th class="pb-2 pr-2">DETAIL</th>
+                    <th class="pb-2">UPDATED</th>
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          `)}
+        </div>
+
+        <div id="manifestModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 p-4">
+          <div class="w-full max-w-4xl rounded-2xl border border-slate-800 bg-slate-950">
+            <div class="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+              <div class="text-sm font-semibold">Job manifest</div>
+              <button class="rounded-xl border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm" onclick="closeManifest()">Close</button>
+            </div>
+            <div class="grid grid-cols-1 gap-3 p-4 lg:grid-cols-2">
+              <div>
+                <div class="text-xs tracking-widest text-slate-400">VIDEO</div>
+                <video id="manVideo" class="mt-2 w-full rounded-xl border border-slate-800 bg-black" controls playsinline></video>
+                <div id="manLinks" class="mt-2 text-sm"></div>
+              </div>
+              <div>
+                <div class="text-xs tracking-widest text-slate-400">JSON</div>
+                <pre id="manJson" class="mt-2 max-h-[60vh] overflow-auto rounded-xl border border-slate-800 bg-slate-900/30 p-3 text-xs text-slate-200"></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const sel = qs('#job_avatar');
+      if (sel && state.selectedAvatarId) sel.value = state.selectedAvatarId;
+    }
+
+    async function createJob() {
+      try {
+        const product_url = qs('#job_product_url').value.trim();
+        const avatar_id = (qs('#job_avatar').value || '').trim();
+        const template_id = (qs('#job_template') ? (qs('#job_template').value || '').trim() : '');
+        if (!product_url || product_url.length < 8) throw new Error('Enter a valid product URL');
+        if (!avatar_id) throw new Error('Select an avatar');
+
+        const product_page_url = qs('#job_product_page_url').value.trim();
+        const imagesRaw = qs('#job_images').value.trim();
+        const title = qs('#job_title').value.trim();
+        const bulletsRaw = qs('#job_bullets').value.trim();
+        const cta_line = qs('#job_cta').value.trim();
+        const script_system_override = qs('#job_sys').value.trim();
+        const elevenlabs_voice_id = qs('#job_voice').value.trim();
+
+        const body = { product_url, avatar_id };
+        if (template_id) body.template_id = template_id;
+        if (product_page_url) body.product_page_url = product_page_url;
+        if (imagesRaw) body.product_image_urls = imagesRaw.split(',').map(s => s.trim()).filter(Boolean);
+        if (title) body.product_title = title;
+        if (bulletsRaw) body.product_bullets = bulletsRaw.split('\n').map(s => s.trim()).filter(Boolean);
+        if (cta_line) body.cta_line = cta_line;
+        if (script_system_override) body.script_system_override = script_system_override;
+        if (elevenlabs_voice_id) body.elevenlabs_voice_id = elevenlabs_voice_id;
+
+        const j = await api('/api/jobs', { method: 'POST', body: JSON.stringify(body) });
+        toast('Queued job ' + j.job_id, 'ok');
+        qs('#job_product_url').value = '';
+        await refreshAll();
+      } catch (e) {
+        toast(e.message || String(e), 'error');
+      }
+    }
+
+    async function saveAvatarSecrets() {
+      try {
+        const aid = state.selectedAvatarId;
+        if (!aid) throw new Error('Select an avatar');
+
+        const social = {};
+        const voice = (qs('#ed_voice') ? qs('#ed_voice').value.trim() : '');
+        const tiktok = (qs('#ed_tiktok') ? qs('#ed_tiktok').value.trim() : '');
+        const base = (qs('#ed_getlate_base') ? qs('#ed_getlate_base').value.trim() : '');
+        const amz = (qs('#ed_amz') ? qs('#ed_amz').value.trim() : '');
+        const key = (qs('#ed_getlate_key') ? qs('#ed_getlate_key').value.trim() : '');
+
+        if (voice) social.elevenlabs_voice_id = voice;
+        if (tiktok) social.tiktok_account_id = tiktok;
+        if (base) social.getlate_base_url = base;
+        if (amz) social.amazon_associates_tag = amz;
+        if (key) social.getlate_api_key = key;
+
+        await api('/api/avatars/' + encodeURIComponent(aid), {
+          method: 'PUT',
+          body: JSON.stringify({ social_config: social }),
+          admin: true
+        });
+        toast('Saved publish/voice', 'ok');
+        await renderAvatarEditor();
+      } catch (e) {
+        toast(e.message || String(e), 'error');
+      }
+    }
+
+    async function openManifest(jobId) {
+      try {
+        const man = await api('/api/jobs/' + encodeURIComponent(jobId) + '/manifest', { method: 'GET' });
+        const m = qs('#manifestModal');
+        m.classList.remove('hidden');
+        m.classList.add('flex');
+
+        const v = qs('#manVideo');
+        const links = qs('#manLinks');
+        const r2 = (man.r2_url || '').trim();
+
+        v.src = '/api/jobs/' + encodeURIComponent(jobId) + '/video';
+
+        const parts = [];
+        parts.push(`<div class="text-slate-400 text-xs">Job <span class="font-mono text-slate-200">${htmlesc(jobId)}</span></div>`);
+        if (r2 && r2.startsWith('http')) {
+          parts.push(`<a class="text-sky-300 hover:underline" href="${htmlesc(r2)}" target="_blank" rel="noopener noreferrer">Open R2 URL</a>`);
+        }
+        links.innerHTML = parts.join('<div class="h-1"></div>');
+
+        qs('#manJson').textContent = JSON.stringify(man, null, 2);
+      } catch (e) {
+        toast(e.message || String(e), 'error');
+      }
+    }
+
+    function closeManifest() {
+      const m = qs('#manifestModal');
+      m.classList.add('hidden');
+      m.classList.remove('flex');
+      qs('#manVideo').removeAttribute('src');
+      qs('#manLinks').innerHTML = '';
+      qs('#manJson').textContent = '';
+    }
+
+    function renderHitl() {
+      const el = qs('#hitl');
+      const job = state.hitlJob;
+
+      const jobInfo = job
+        ? `<div class="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+            <div class="text-xs tracking-widest text-slate-400">CURRENT HITL JOB</div>
+            <div class="mt-2 text-sm">Job <span class="font-mono">${htmlesc(job.job_id)}</span></div>
+            <div class="mt-1 text-xs text-slate-400">${htmlesc(job.product_url || '')}</div>
+          </div>`
+        : `<div class="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-400">No HITL job loaded.</div>`;
+
+      el.innerHTML = `
+        <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          ${card('HITL review (dequeues from queue)', `
+            <div class="grid grid-cols-1 gap-3">
+              <video id="hitlVideo" class="w-full rounded-2xl border border-slate-800 bg-black" controls playsinline></video>
+              ${jobInfo}
+              <div class="flex flex-wrap gap-2">
+                <button class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="hitlLoadNext()">Load next</button>
+                <button class="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950" onclick="hitlApprove()">Approve</button>
+                <button class="rounded-xl bg-rose-500 px-4 py-2 text-sm font-semibold text-slate-950" onclick="hitlReject()">Reject</button>
+                <button class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="hitlRegenerate()">Regenerate</button>
+              </div>
+              <div class="text-xs text-slate-400">Approve triggers publish attempt (GetLate/Zernio if configured) or sets MANUAL_PUBLISH_REQUIRED.</div>
+            </div>
+          `)}
+
+          ${card('Tips', `
+            <div class="space-y-2 text-sm text-slate-300">
+              <div class="text-slate-400">If a product site blocks scraping (Temu, etc), enqueue the job with image URLs from your browser (Jobs tab → Image URLs override).</div>
+              <div class="text-slate-400">If the voice is wrong, set avatar social_config.json → elevenlabs_voice_id or pass a per-job voice override.</div>
+              <div class="text-slate-400">If the CTA must change, set avatar persona.json → cta_line, or pass per-job CTA override.</div>
+            </div>
+          `)}
+        </div>
+      `;
+
+      const v = qs('#hitlVideo');
+      if (job) v.src = '/api/jobs/' + encodeURIComponent(job.job_id) + '/video';
+    }
+
+    async function hitlLoadNext() {
+      try {
+        const j = await api('/api/next-job', { method: 'GET' });
+        state.hitlJob = j.job;
+        renderHitl();
+        if (!state.hitlJob) toast('No HITL jobs available (timeout)', 'info');
+      } catch (e) {
+        toast(e.message || String(e), 'error');
+      }
+    }
+
+    async function hitlApprove() {
+      try {
+        if (!state.hitlJob) throw new Error('Load a HITL job first');
+        await api('/api/approve/' + encodeURIComponent(state.hitlJob.job_id), { method: 'POST' });
+        toast('Approved', 'ok');
+        state.hitlJob = null;
+        renderHitl();
+        await refreshAll();
+      } catch (e) {
+        toast(e.message || String(e), 'error');
+      }
+    }
+
+    async function hitlReject() {
+      try {
+        if (!state.hitlJob) throw new Error('Load a HITL job first');
+        await api('/api/reject/' + encodeURIComponent(state.hitlJob.job_id), { method: 'POST' });
+        toast('Rejected (URL blacklisted for 7d)', 'ok');
+        state.hitlJob = null;
+        renderHitl();
+        await refreshAll();
+      } catch (e) {
+        toast(e.message || String(e), 'error');
+      }
+    }
+
+    async function hitlRegenerate() {
+      try {
+        if (!state.hitlJob) throw new Error('Load a HITL job first');
+        const j = await api('/api/regenerate/' + encodeURIComponent(state.hitlJob.job_id), { method: 'POST' });
+        toast('Requeued as ' + j.new_job_id, 'ok');
+        state.hitlJob = null;
+        renderHitl();
+        await refreshAll();
+      } catch (e) {
+        toast(e.message || String(e), 'error');
+      }
+    }
+
+    function renderAvatars() {
+      const el = qs('#avatars');
+
+      const list = (state.avatars || []).map(a => {
+        const active = state.selectedAvatarId === a.avatar_id;
+        const img = a.portrait_url
+          ? `<img src="${htmlesc(a.portrait_url)}" class="h-10 w-10 rounded-xl border border-slate-800 object-cover" />`
+          : `<div class="h-10 w-10 rounded-xl border border-slate-800 bg-slate-900/40"></div>`;
+        const chips = [
+          badge(!!a.has_portrait, 'portrait'),
+          badge(!!a.has_face, 'face'),
+          badge(!!a.has_social_config, 'social_config'),
+        ].join(' ');
+        return `<button class="w-full rounded-2xl border px-4 py-3 text-left ${active ? 'border-sky-700 bg-sky-950/20' : 'border-slate-800 bg-slate-900/40 hover:bg-slate-900/70'}" onclick="selectAvatar('${htmlesc(a.avatar_id)}')">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex items-start gap-3">
+              ${img}
+              <div>
+                <div class="text-sm font-semibold">${htmlesc(a.avatar_id)}</div>
+                <div class="mt-1 text-xs text-slate-400">${htmlesc(a.niche || '')}</div>
+              </div>
+            </div>
+            <div class="flex flex-wrap justify-end gap-1">${chips}</div>
+          </div>
+        </button>`;
+      }).join('') || `<div class="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-400">No avatars found.</div>`;
+
+      el.innerHTML = `
+        <div class="grid grid-cols-1 gap-4 lg:grid-cols-[360px_1fr]">
+          ${card('Avatar list', `
+            <div class="space-y-2">${list}</div>
+            <div class="mt-3 flex gap-2">
+              <button class="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm" onclick="loadAvatars()">Refresh</button>
+              <button class="w-full rounded-xl bg-sky-500 px-3 py-2 text-sm font-semibold text-slate-950" onclick="openAvatarCreate()">New</button>
+            </div>
+          `)}
+
+          ${card('Avatar editor', `
+            <div id="avatarEditor" class="text-sm text-slate-400">Select an avatar.</div>
+          `)}
+        </div>
+
+        <div id="avatarModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 p-4">
+          <div class="w-full max-w-3xl rounded-2xl border border-slate-800 bg-slate-950">
+            <div class="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+              <div class="text-sm font-semibold" id="avatarModalTitle">Create avatar</div>
+              <button class="rounded-xl border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm" onclick="closeAvatarModal()">Close</button>
+            </div>
+            <div class="grid grid-cols-1 gap-3 p-4 lg:grid-cols-2">
+              <div class="space-y-3">
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">AVATAR ID</div>
+                  <input id="av_id" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="myavatar" />
+                </div>
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">NAME</div>
+                  <input id="av_name" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="Display name" />
+                </div>
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">NICHE</div>
+                  <input id="av_niche" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="Beauty, skincare..." />
+                </div>
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">DESCRIPTION (used for avatar image generation + tone)</div>
+                  <textarea id="av_desc" class="mt-1 h-28 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="Who is this avatar? Tone, style, location, vibe..." ></textarea>
+                </div>
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">CTA LINE (optional default)</div>
+                  <input id="av_cta" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="Get yours - Link in bio | ..." />
+                </div>
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">UGC SCRIPT SYSTEM OVERRIDE (optional default)</div>
+                  <textarea id="av_sys" class="mt-1 h-24 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="If set, overrides the default UGC script system prompt" ></textarea>
+                </div>
+              </div>
+
+              <div class="space-y-3">
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">PORTRAIT IMAGE (optional upload)</div>
+                  <input id="av_portrait" type="file" accept="image/*" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">FACE IMAGE (optional upload)</div>
+                  <input id="av_face" type="file" accept="image/*" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" />
+                </div>
+                <div class="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+                  <div class="text-xs tracking-widest text-slate-400">PUBLISH + VOICE (PER AVATAR)</div>
+                  <div class="mt-2 grid grid-cols-1 gap-3">
+                    <div>
+                      <div class="text-xs tracking-widest text-slate-400">ELEVENLABS VOICE ID</div>
+                      <input id="av_voice" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="CT96S5RC77U74JDR24HG" />
+                    </div>
+                    <div>
+                      <div class="text-xs tracking-widest text-slate-400">GETLATE/ZERNIO API KEY</div>
+                      <input id="av_getlate_key" type="password" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="Bearer token (per avatar)" />
+                      <div class="mt-1 text-xs text-slate-500">This is per-avatar to avoid cross-posting.</div>
+                    </div>
+                    <div>
+                      <div class="text-xs tracking-widest text-slate-400">GETLATE BASE URL</div>
+                      <input id="av_getlate_base" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" value="https://zernio.com/api" />
+                    </div>
+                    <div>
+                      <div class="text-xs tracking-widest text-slate-400">TIKTOK ACCOUNT ID</div>
+                      <input id="av_tiktok" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="per avatar" />
+                    </div>
+                    <div>
+                      <div class="text-xs tracking-widest text-slate-400">AMAZON ASSOCIATES TAG</div>
+                      <input id="av_amz" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="anikaglow-20" />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">SOCIAL CONFIG JSON (optional)</div>
+                  <textarea id="av_social" class="mt-1 h-48 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 font-mono text-xs" placeholder='{"elevenlabs_voice_id":"...","getlate_api_key":"..."}'></textarea>
+                  <div class="mt-1 text-xs text-slate-500">Secrets are not returned by the API; if you edit later you must re-enter them.</div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <button class="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950" onclick="saveAvatarFromModal()">Save</button>
+                  <button class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="generateFaceFromModal()">Generate face</button>
+                  <button class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="generatePortraitFromModal()">Generate portrait</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      renderAvatarEditor();
+    }
+
+    async function selectAvatar(aid) {
+      state.selectedAvatarId = aid;
+      renderAvatars();
+      renderAvatarEditor();
+    }
+
+    async function renderAvatarEditor() {
+      const box = qs('#avatarEditor');
+      const aid = state.selectedAvatarId;
+      if (!box) return;
+      if (!aid) { box.textContent = 'Select an avatar.'; return; }
+
+      try {
+        const data = await api('/api/avatars/' + encodeURIComponent(aid), { method: 'GET' });
+        const persona = data.persona || {};
+        const social = data.social_config || {};
+        const present = data.social_config_secrets_present || {};
+        const portraitUrl = data.portrait_url;
+
+        box.innerHTML = `
+          <div class="grid grid-cols-1 gap-3">
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+              <div class="text-xs tracking-widest text-slate-400">AVATAR</div>
+              <div class="mt-2 flex items-start gap-3">
+                ${portraitUrl ? `<img src="${htmlesc(portraitUrl)}" class="h-14 w-14 rounded-2xl border border-slate-800 object-cover" />` : `<div class="h-14 w-14 rounded-2xl border border-slate-800 bg-slate-900/40"></div>`}
+                <div>
+                  <div class="text-sm font-semibold">${htmlesc(aid)}</div>
+                  <div class="mt-1 text-xs text-slate-400">${htmlesc(persona.description || '')}</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+              <div class="text-xs tracking-widest text-slate-400">PER-AVATAR PUBLISH SETTINGS (ANTI CROSS-POST)</div>
+              <div class="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">ELEVENLABS VOICE ID</div>
+                  <input id="ed_voice" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" value="${htmlesc(social.elevenlabs_voice_id || '')}" />
+                </div>
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">TIKTOK ACCOUNT ID</div>
+                  <input id="ed_tiktok" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" value="${htmlesc(social.tiktok_account_id || '')}" />
+                </div>
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">GETLATE BASE URL</div>
+                  <input id="ed_getlate_base" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" value="${htmlesc(social.getlate_base_url || social.zernio_api_base || 'https://zernio.com/api')}" />
+                </div>
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">AMAZON ASSOCIATES TAG</div>
+                  <input id="ed_amz" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" value="${htmlesc(social.amazon_associates_tag || '')}" />
+                </div>
+              </div>
+              <div class="mt-3 rounded-xl border border-slate-800 bg-slate-900/30 p-3">
+                <div class="text-xs tracking-widest text-slate-400">GETLATE API KEY (SECRET)</div>
+                <div class="mt-1 text-xs text-slate-500">Stored per avatar. Present on server: <span class="text-slate-200">${present.getlate_api_key ? 'yes' : 'no'}</span></div>
+                <input id="ed_getlate_key" type="password" class="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="Paste full key to set/replace (leave blank to keep)" />
+                <div class="mt-2 flex flex-wrap gap-2">
+                  <button class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="saveAvatarSecrets()">Save publish/voice</button>
+                  <button class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="voiceTestAvatar()">Voice test</button>
+                </div>
+                <audio id="voice_test_audio" class="mt-3 w-full" controls style="display:none"></audio>
+              </div>
+            </div>
+
+            <details class="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+              <summary class="cursor-pointer text-xs tracking-widest text-slate-300">ADVANCED (RAW JSON)</summary>
+              <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">PERSONA JSON</div>
+                  <textarea id="ed_persona" class="mt-2 h-64 w-full rounded-xl border border-slate-800 bg-slate-900/30 p-3 font-mono text-xs">${htmlesc(JSON.stringify(persona, null, 2))}</textarea>
+                </div>
+                <div>
+                  <div class="text-xs tracking-widest text-slate-400">SOCIAL CONFIG JSON</div>
+                  <textarea id="ed_social" class="mt-2 h-64 w-full rounded-xl border border-slate-800 bg-slate-900/30 p-3 font-mono text-xs">${htmlesc(JSON.stringify(social, null, 2))}</textarea>
+                  <div class="mt-2 text-xs text-slate-500">Masked secrets are shown as ***. To update secrets, paste full real values.</div>
+                </div>
+              </div>
+            </details>
+
+            <div class="flex flex-wrap gap-2">
+              <button class="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950" onclick="saveAvatarEdits()">Save</button>
+              <button class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="syncAvatarToR2()">Sync to R2</button>
+              <button class="rounded-xl border border-rose-900/60 bg-rose-950/30 px-4 py-2 text-sm text-rose-100" onclick="deleteAvatar()">Delete</button>
+            </div>
+          </div>
+        `;
+      } catch (e) {
+        box.textContent = e.message || String(e);
+      }
+    }
+
+    async function voiceTestAvatar() {
+      try {
+        const aid = state.selectedAvatarId;
+        if (!aid) throw new Error('Select an avatar');
+        const voice_id = (qs('#ed_voice') ? qs('#ed_voice').value.trim() : '');
+        const j = await api('/api/avatars/' + encodeURIComponent(aid) + '/voice-test', {
+          method: 'POST',
+          body: JSON.stringify({ voice_id: voice_id || undefined, text: 'Hey! This is a quick voice test for this avatar.' }),
+          admin: true
+        });
+        const b64 = (j && j.audio_b64) ? String(j.audio_b64) : '';
+        if (!b64) throw new Error('No audio returned');
+        const audio = qs('#voice_test_audio');
+        if (audio) {
+          audio.src = 'data:audio/mpeg;base64,' + b64;
+          audio.style.display = 'block';
+          audio.play().catch(() => {});
+        }
+        toast('Voice test ready', 'ok');
+      } catch (e) {
+        toast(e.message || String(e), 'error');
+      }
+    }
+
+    function openAvatarCreate() {
+      const m = qs('#avatarModal');
+      qs('#avatarModalTitle').textContent = 'Create avatar';
+      m.classList.remove('hidden');
+      m.classList.add('flex');
+      qs('#av_id').value = '';
+      qs('#av_name').value = '';
+      qs('#av_niche').value = '';
+      qs('#av_desc').value = '';
+      qs('#av_cta').value = '';
+      qs('#av_sys').value = '';
+      qs('#av_voice').value = '';
+      qs('#av_getlate_key').value = '';
+      qs('#av_getlate_base').value = 'https://zernio.com/api';
+      qs('#av_tiktok').value = '';
+      qs('#av_amz').value = '';
+      qs('#av_social').value = '';
+      qs('#av_portrait').value = '';
+      qs('#av_face').value = '';
+    }
+
+    function closeAvatarModal() {
+      const m = qs('#avatarModal');
+      m.classList.add('hidden');
+      m.classList.remove('flex');
+    }
+
+    function fileToB64(file) {
+      return new Promise((resolve, reject) => {
+        if (!file) return resolve(null);
+        const r = new FileReader();
+        r.onload = () => {
+          const res = String(r.result || '');
+          const idx = res.indexOf('base64,');
+          resolve(idx >= 0 ? res.slice(idx + 7) : null);
+        };
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+    }
+
+    async function saveAvatarFromModal() {
+      try {
+        const avatar_id = qs('#av_id').value.trim();
+        if (!avatar_id) throw new Error('avatar_id required');
+
+        let social = null;
+        const socialRaw = qs('#av_social').value.trim();
+        if (socialRaw) social = JSON.parse(socialRaw);
+
+        const sc = Object.assign({}, (social && typeof social === 'object') ? social : {});
+        const voice = qs('#av_voice').value.trim();
+        const getlateKey = qs('#av_getlate_key').value.trim();
+        const getlateBase = qs('#av_getlate_base').value.trim();
+        const tiktok = qs('#av_tiktok').value.trim();
+        const amz = qs('#av_amz').value.trim();
+        if (voice) sc.elevenlabs_voice_id = voice;
+        if (getlateKey) sc.getlate_api_key = getlateKey;
+        if (getlateBase) sc.getlate_base_url = getlateBase;
+        if (tiktok) sc.tiktok_account_id = tiktok;
+        if (amz) sc.amazon_associates_tag = amz;
+
+        const portraitB64 = await fileToB64(qs('#av_portrait').files[0]);
+        const faceB64 = await fileToB64(qs('#av_face').files[0]);
+
+        const persona = {
+          avatar_id,
+          name: qs('#av_name').value.trim() || avatar_id,
+          niche: qs('#av_niche').value.trim(),
+          description: qs('#av_desc').value.trim(),
+        };
+        const cta = qs('#av_cta').value.trim();
+        const sys = qs('#av_sys').value.trim();
+        if (cta) persona.cta_line = cta;
+        if (sys) persona.ugc_script_system_override = sys;
+
+        const body = { avatar_id, persona };
+        if (Object.keys(sc).length) body.social_config = sc;
+        if (portraitB64) body.portrait_png_b64 = portraitB64;
+        if (faceB64) body.face_png_b64 = faceB64;
+
+        await api('/api/avatars', { method: 'POST', body: JSON.stringify(body), admin: true });
+        toast('Avatar created: ' + avatar_id, 'ok');
+        closeAvatarModal();
+        await loadAvatars();
+        state.selectedAvatarId = avatar_id;
+        renderAvatars();
+      } catch (e) {
+        toast(e.message || String(e), 'error');
+      }
+    }
+
+    async function generateFaceFromModal() {
+      try {
+        const avatar_id = qs('#av_id').value.trim();
+        const description = qs('#av_desc').value.trim();
+        if (!avatar_id) throw new Error('avatar_id required');
+        if (!description) throw new Error('description required');
+        await api('/api/avatars/' + encodeURIComponent(avatar_id) + '/generate-face', { method: 'POST', body: JSON.stringify({ description }), admin: true });
+        toast('Face generated (saved to avatar folder). Save + Sync to R2.', 'ok');
+      } catch (e) {
+        toast(e.message || String(e), 'error');
+      }
+    }
+
+    async function generatePortraitFromModal() {
+      try {
+        const avatar_id = qs('#av_id').value.trim();
+        const description = qs('#av_desc').value.trim();
+        if (!avatar_id) throw new Error('avatar_id required');
+        if (!description) throw new Error('description required');
+        await api('/api/avatars/' + encodeURIComponent(avatar_id) + '/generate-portrait', { method: 'POST', body: JSON.stringify({ description }), admin: true });
+        toast('Portrait generated (saved to avatar folder). Save + Sync to R2.', 'ok');
+      } catch (e) {
+        toast(e.message || String(e), 'error');
+      }
+    }
+
+    async function saveAvatarEdits() {
+      try {
+        const aid = state.selectedAvatarId;
+        if (!aid) throw new Error('Select an avatar');
+        const personaRaw = qs('#ed_persona').value;
+        const socialRaw = qs('#ed_social').value;
+        const persona = JSON.parse(personaRaw);
+        const social = JSON.parse(socialRaw);
+        await api('/api/avatars/' + encodeURIComponent(aid), { method: 'PUT', body: JSON.stringify({ persona, social_config: social }), admin: true });
+        toast('Saved', 'ok');
+        await loadAvatars();
+      } catch (e) {
+        toast(e.message || String(e), 'error');
+      }
+    }
+
+    async function syncAvatarToR2() {
+      try {
+        const aid = state.selectedAvatarId;
+        if (!aid) throw new Error('Select an avatar');
+        const j = await api('/api/avatars/' + encodeURIComponent(aid) + '/sync-to-r2', { method: 'POST', body: JSON.stringify({ include_social_config: true }), admin: true });
+        toast('Synced to R2: ' + (j.uploaded || []).join(', '), 'ok');
+      } catch (e) {
+        toast(e.message || String(e), 'error');
+      }
+    }
+
+    async function deleteAvatar() {
+      try {
+        const aid = state.selectedAvatarId;
+        if (!aid) throw new Error('Select an avatar');
+        const delR2 = confirm('Also delete this avatar from R2 storage (best-effort)?\n\nOK = delete from R2 too\nCancel = local delete only');
+        if (!confirm('Delete avatar ' + aid + '?')) return;
+        await api('/api/avatars/' + encodeURIComponent(aid) + '?delete_r2=' + (delR2 ? 'true' : 'false'), { method: 'DELETE', admin: true });
+        toast('Deleted: ' + aid, 'ok');
+        state.selectedAvatarId = null;
+        await loadAvatars();
+      } catch (e) {
+        toast(e.message || String(e), 'error');
+      }
+    }
+
+    function renderSettings() {
+      const el = qs('#settings');
+      const o = state.ops || {};
+      const adminConfigured = !!o.admin_api_configured;
+      const opsConfigured = !!o.ops_api_configured;
+      const adminType = state.showAdminKey ? 'text' : 'password';
+      const opsType = state.showOpsKey ? 'text' : 'password';
+      el.innerHTML = `
+        <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          ${card('Keys', `
+            <div class="grid grid-cols-1 gap-3">
+              <div>
+                <div class="text-xs tracking-widest text-slate-400">ADMIN PASSWORD (X-Admin-Key)</div>
+                <div class="mt-1 text-xs text-slate-500">Protects Mission Control admin actions (jobs, avatars, settings). Set <span class="font-mono text-slate-200">ADMIN_API_KEY</span> on the server.</div>
+                <div class="mt-2 flex gap-2">
+                  <input id="set_admin" type="${adminType}" class="w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="ADMIN_API_KEY" value="${htmlesc(state.adminKey)}" />
+                  <button class="shrink-0 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm" onclick="toggleKey('set_admin')">${state.showAdminKey ? 'Hide' : 'Show'}</button>
+                </div>
+                <div class="mt-1 text-xs text-slate-500">Server configured: <span class="text-slate-200">${adminConfigured ? 'yes' : 'no'}</span></div>
+              </div>
+              <div>
+                <div class="text-xs tracking-widest text-slate-400">OPS PASSWORD (X-Ops-Key)</div>
+                <div class="mt-1 text-xs text-slate-500">Protects automation that can enqueue many jobs (Selector/Scanner/etc). Set <span class="font-mono text-slate-200">OPS_API_KEY</span> on the server.</div>
+                <div class="mt-2 flex gap-2">
+                  <input id="set_ops" type="${opsType}" class="w-full rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm" placeholder="OPS_API_KEY" value="${htmlesc(state.opsKey)}" />
+                  <button class="shrink-0 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm" onclick="toggleKey('set_ops')">${state.showOpsKey ? 'Hide' : 'Show'}</button>
+                </div>
+                <div class="mt-1 text-xs text-slate-500">Server configured: <span class="text-slate-200">${opsConfigured ? 'yes' : 'no'}</span></div>
+              </div>
+              <div class="flex gap-2">
+                <button class="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950" onclick="saveKeys()">Save</button>
+                <button class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="refreshAll()">Refresh all</button>
+              </div>
+              <div class="text-xs text-slate-500">If ADMIN_API_KEY is not set on the server, admin endpoints return 503 (disabled). For production, set ADMIN_API_KEY in Railway env.</div>
+            </div>
+          `)}
+
+          ${card('Selector (Phase 3)', `
+            <div class="grid grid-cols-1 gap-3">
+              <div class="text-sm text-slate-300">Runs products.csv scoring and queues top jobs. Requires OPS_API_KEY on the server.</div>
+              <div class="flex gap-2">
+                <button class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="runSelector()">Run selector</button>
+                <button class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="loadOps()">Refresh ops</button>
+              </div>
+              <pre id="sel_out" class="max-h-64 overflow-auto rounded-xl border border-slate-800 bg-slate-900/30 p-3 text-xs text-slate-200"></pre>
+            </div>
+          `)}
+        </div>
+      `;
+    }
+
+    function saveKeys() {
+      state.adminKey = qs('#set_admin').value.trim();
+      state.opsKey = qs('#set_ops').value.trim();
+      localStorage.setItem('mc_admin_key', state.adminKey);
+      localStorage.setItem('mc_ops_key', state.opsKey);
+      toast('Saved keys to this browser', 'ok');
+    }
+
+    function toggleKey(id) {
+      if (id === 'set_admin') state.showAdminKey = !state.showAdminKey;
+      if (id === 'set_ops') state.showOpsKey = !state.showOpsKey;
+      renderSettings();
+    }
+
+    async function runSelector() {
+      try {
+        const j = await api('/api/selector/run', { method: 'POST', body: '{}', ops: true });
+        qs('#sel_out').textContent = JSON.stringify(j, null, 2);
+        toast('Selector completed', 'ok');
+        await refreshAll();
+      } catch (e) {
+        qs('#sel_out').textContent = e.message || String(e);
+        toast(e.message || String(e), 'error');
+      }
+    }
+
+    async function refreshAll() {
+      try {
+        await loadOps();
+        await loadTemplates();
+        if (state.adminKey) {
+          try { await loadQueue(); } catch (e) { /* ignore */ }
+          try { await loadAnalytics(); } catch (e) { /* ignore */ }
+        } else {
+          renderQueue();
+          state.analytics = null;
+          renderAnalytics();
+        }
+        await loadAvatars();
+        renderHitl();
+        renderSettings();
+      } catch (e) {
+        toast(e.message || String(e), 'error');
+      }
+    }
+
+    function init() {
+      setTab('ops');
+      renderHitl();
+      renderSettings();
+      refreshAll();
+      setInterval(() => {
+        if (!document.hidden) loadOps().catch(() => {});
+      }, 30000);
+    }
+
+    init();
+  </script>
+</body>
+</html>

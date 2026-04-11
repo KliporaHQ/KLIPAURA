@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KLIP-AVATAR Core V1 | Mission Control</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap');
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div>
+                <h1>KLIP-AVATAR</h1>
+                <p style="margin: 0; font-size: 0.9rem; color: #64748b;">Core V1 • Execution Pipeline</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div id="connection-status" style="padding: 4px 12px; background: #166534; color: #4ade80; border-radius: 9999px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;">
+                    <span class="status-dot done"></span>
+                    CONNECTED
+                </div>
+                <button onclick="resetPipeline()" style="background: #334155; border: 1px solid #475569; color: #e2e8f0; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Reset</button>
+            </div>
+        </div>
+
+        <!-- Left Panel: Controls -->
+        <div class="left-panel">
+            <h2>CONTROLS</h2>
+            <div class="status-info">
+                <strong>Topic:</strong><br>
+                <span id="current-topic" style="color: #60a5fa; font-size: 0.95rem;">No topic selected</span>
+            </div>
+            
+            <input type="text" id="topic-input" class="topic-input" 
+                   placeholder="Best budget skincare in Dubai under $20" 
+                   value="Best budget skincare in Dubai under $20">
+
+            <h2 style="font-size: 0.95rem; margin-top: 18px;">VIDEO SETTINGS</h2>
+            <label for="aspect-ratio" style="font-size: 0.8rem; color: #94a3b8;">Aspect ratio</label>
+            <select id="aspect-ratio" class="topic-input" style="margin-top: 4px;">
+                <option value="9:16" selected>9:16 (vertical)</option>
+                <option value="1:1">1:1 (square)</option>
+                <option value="16:9">16:9 (landscape)</option>
+            </select>
+            <label for="duration-tier" style="font-size: 0.8rem; color: #94a3b8; display: block; margin-top: 10px;">Duration</label>
+            <select id="duration-tier" class="topic-input" style="margin-top: 4px;">
+                <option value="SHORT" selected>Short (~6s)</option>
+                <option value="STANDARD">Standard (~12s)</option>
+                <option value="LONG">Long (~20s)</option>
+            </select>
+
+            <h2 style="font-size: 0.95rem; margin-top: 18px;">PRODUCT (AFFILIATE)</h2>
+            <input type="url" id="product-url" class="topic-input" placeholder="Product URL (optional — enables affiliate mode)" value="">
+
+            <button id="run-btn" class="run-btn" onclick="runPipeline()">
+                RUN PIPELINE
+            </button>
+            
+            <div style="margin-top: 30px;">
+                <h2 style="font-size: 0.95rem;">PIPELINE STAGES</h2>
+                <div id="stage-list"></div>
+            </div>
+        </div>
+
+        <!-- Center: Pipeline Flow -->
+        <div class="center-panel">
+            <h2 style="text-align: center;">PIPELINE EXECUTION</h2>
+            
+            <div class="pipeline-flow" id="pipeline-flow">
+                <div class="stage" id="stage-script">
+                    <div class="status-dot idle" id="dot-script"></div>
+                    <div class="stage-label">SCRIPT</div>
+                    <small>Generate script</small>
+                </div>
+                <div class="stage" id="stage-media">
+                    <div class="status-dot idle" id="dot-media"></div>
+                    <div class="stage-label">MEDIA</div>
+                    <small>Assets &amp; voice</small>
+                </div>
+                <div class="stage" id="stage-render">
+                    <div class="status-dot idle" id="dot-render"></div>
+                    <div class="stage-label">RENDER</div>
+                    <small>FFmpeg video</small>
+                </div>
+                <div class="stage" id="stage-publish">
+                    <div class="status-dot idle" id="dot-publish"></div>
+                    <div class="stage-label">PUBLISH</div>
+                    <small>Save &amp; done</small>
+                </div>
+            </div>
+
+            <div class="progress-container">
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 5px;">
+                    <span>PROGRESS</span>
+                    <span id="progress-text">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="video-player">
+                <h3 style="margin-top: 0; font-size: 1rem;">OUTPUT VIDEO</h3>
+                <video id="video-player" controls>
+                    Your browser does not support the video tag.
+                </video>
+                <div id="video-info" style="margin-top: 10px; font-size: 0.8rem; color: #64748b; text-align: center;">
+                    Video will appear here when ready
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: System Logs -->
+        <div class="right-panel">
+            <h2>SYSTEM LOGS</h2>
+            <div id="logs-container" class="logs">
+                [SYSTEM] Core V1 initialized<br>
+                Ready to generate influencer video
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <h2 style="font-size: 0.95rem;">CURRENT STATUS</h2>
+                <div id="current-status" class="status-info">
+                    <div><strong>Stage:</strong> <span id="status-stage">idle</span></div>
+                    <div><strong>Progress:</strong> <span id="status-progress">0%</span></div>
+                    <div><strong>State:</strong> <span id="status-state">idle</span></div>
+                    <div><strong>Mode:</strong> <span id="system-mode">DIRECT</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            KLIP-AVATAR Core V1 • Single-threaded Pipeline • Port 8000 • 
+            <span onclick="window.location.reload()" style="cursor: pointer; text-decoration: underline;">Refresh</span>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

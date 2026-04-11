@@ -1,0 +1,2 @@
+"""Influencer Engine — config."""
+DEFAULT = {}

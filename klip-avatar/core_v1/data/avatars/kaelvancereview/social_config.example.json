@@ -1,0 +1,13 @@
+{
+  "_comment": "LOCKED — do not activate until @theanikaglow hits $1K P&L (TASK_TRACKER). Copy to social_config.json when ready.",
+  "elevenlabs_voice_id": "YOUR_VOICE_ID",
+  "video_style": "ken_burns",
+  "content_type": "affiliate_review",
+  "platforms": ["tiktok", "instagram", "youtube"],
+  "script_style": "affiliate_review",
+  "render_layout": "ken_burns_slideshow_9x16",
+  "getlate_api_key": "",
+  "getlate_base_url": "https://zernio.com/api",
+  "tiktok_account_id": "",
+  "amazon_associates_tag": ""
+}

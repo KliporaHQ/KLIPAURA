@@ -1,0 +1,94 @@
+[
+  {
+    "id": "split_screen_review",
+    "name": "Split-Screen Review",
+    "description": "Classic affiliate split: product strip on top, talking head below. Strong for Amazon-style reviews.",
+    "preview_hint": "60/40 split · hook → problem → demo → benefits → CTA",
+    "scene_types": ["hook", "problem", "demo", "benefits", "cta"],
+    "knobs": {
+      "split_ratio": "60/40",
+      "cta_timing": "final_20pct",
+      "captions": "bottom",
+      "caption_bottom_margin": 180
+    }
+  },
+  {
+    "id": "problem_solution",
+    "name": "Problem → Solution",
+    "description": "Lead with pain point, then show the product as the fix. Good for skincare and gadgets.",
+    "preview_hint": "65/35 · CTA in last 5s",
+    "scene_types": ["hook", "problem", "demo", "benefits", "cta"],
+    "knobs": {
+      "split_ratio": "65/35",
+      "cta_timing": "final_5s",
+      "captions": "bottom",
+      "caption_bottom_margin": 180
+    }
+  },
+  {
+    "id": "top5_list",
+    "name": "Top 5 List",
+    "description": "Listicle energy: multiple benefit beats before CTA. Works for comparisons and roundups.",
+    "preview_hint": "70/30 · extra face zoom",
+    "scene_types": ["hook", "demo", "benefits", "benefits", "cta"],
+    "knobs": {
+      "split_ratio": "70/30",
+      "cta_timing": "final_3s",
+      "captions": "bottom",
+      "caption_bottom_margin": 220,
+      "bottom_face_zoom": 1.18
+    }
+  },
+  {
+    "id": "before_after",
+    "name": "Before / After",
+    "description": "Transformation narrative: problem-heavy open, payoff and proof in the middle.",
+    "preview_hint": "55/45 · dual benefit beats",
+    "scene_types": ["problem", "demo", "benefits", "benefits", "cta"],
+    "knobs": {
+      "split_ratio": "55/45",
+      "cta_timing": "final_5s",
+      "captions": "bottom",
+      "caption_bottom_margin": 200
+    }
+  },
+  {
+    "id": "reaction_duet",
+    "name": "Reaction Duet",
+    "description": "Fast, reactive pacing with fewer scenes — good for trending sounds and quick hooks.",
+    "preview_hint": "75/25 · tight CTA",
+    "scene_types": ["hook", "demo", "benefits", "cta"],
+    "knobs": {
+      "split_ratio": "75/25",
+      "cta_timing": "final_3s",
+      "captions": "bottom",
+      "caption_bottom_margin": 180
+    }
+  },
+  {
+    "id": "testimonial_stack",
+    "name": "Testimonial Stack",
+    "description": "Social-proof heavy: benefits and credibility before the demo closes.",
+    "preview_hint": "60/40 · longer CTA window",
+    "scene_types": ["hook", "benefits", "demo", "benefits", "cta"],
+    "knobs": {
+      "split_ratio": "60/40",
+      "cta_timing": "final_10s",
+      "captions": "bottom",
+      "caption_bottom_margin": 180
+    }
+  },
+  {
+    "id": "price_ladder",
+    "name": "Price Ladder",
+    "description": "Shorter arc focused on value and urgency — fewer scenes, clear offer.",
+    "preview_hint": "50/50 balanced split",
+    "scene_types": ["hook", "problem", "demo", "cta"],
+    "knobs": {
+      "split_ratio": "50/50",
+      "cta_timing": "final_5s",
+      "captions": "bottom",
+      "caption_bottom_margin": 180
+    }
+  }
+]

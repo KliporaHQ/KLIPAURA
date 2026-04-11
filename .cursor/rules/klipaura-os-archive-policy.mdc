@@ -1,0 +1,43 @@
+---
+description: KLIPAURA archive and import policy — what folders are dead and must never be imported from
+alwaysApply: true
+---
+
+# KLIPAURA — ARCHIVE & IMPORT POLICY
+
+## DEAD FOLDERS (READ-ONLY REFERENCE — NEVER IMPORT FROM)
+
+These folders exist on disk but are permanently archived. Do not import, copy logic from, or run code in them without explicit instruction.
+
+| Folder | Reason Dead |
+|--------|-------------|
+| `E:\KLIPAURA_MASTER_AUTOMATION\` | Empty skeleton, never populated |
+| `E:\KLIPAURA-old-full-backup\` | Snapshot superseded by current system |
+| `E:\KLIPAURA BACKUP\` | Snapshot superseded by current system |
+| `E:\ARCHIVE_AND_LEGACY\` | n8n workflows and legacy scripts, all replaced |
+| `E:\PICO_KLIPAURA\` | Trading bot copy mixed with wrong project |
+| `E:\KLIPORA (2).zip`, `E:\KLIPORA.zip` | 1.3 GB redundant zips |
+| Git-tracked files at `E:\` root | All deleted from working tree (mass `D` in git status) |
+
+## SOURCE FOLDERS (ONE-TIME EXTRACTION ONLY)
+
+Extract specific files from these once, adapt them, then use only from `E:\KLIPAURA\`.
+
+| Source | What to Extract | Extract To |
+|--------|----------------|-----------|
+| `E:\KLIPORA\KLIPORA MASTER AUTOMATION\Infrastructure\storage\s3_store.py` | R2 boto3 upload | `infrastructure/storage.py` |
+| `E:\KLIPORA\KLIPORA MASTER AUTOMATION\services\influencer_engine\distribution\getlate_connector.py` | Social publish | `klip-dispatch/publisher.py` |
+| `E:\KLIPORA\KLIPORA MASTER AUTOMATION\Infrastructure\redis_client.py` | Redis client | `infrastructure/redis_client.py` |
+| `E:\KLIPAURA\klipaura-core\` | Agents + SystemGuardian | `klipaura-core/` (move whole folder) |
+| `E:\KLIPAURA\KLIP-TRADER\` | Trading bot | `klip-trader/` (move whole folder) |
+| `E:\KLIPAURA\KLIP-SELECTOR\layout_selector.py` | Layout routing logic | `klip-selector/layout_router.py` |
+| `E:\KLIPAURA\klipaura-core\src\klipaura_core\shared\uae_content_safety.py` | UAE filter | `klip-selector/uae_filter.py` |
+| `E:\KLIPORA\KLIPORA MASTER AUTOMATION\services\scheduler\auto_job_scheduler.py` | Scheduling loop skeleton | `scheduler.py` (adapt) |
+
+## ACTIVE WORKSPACE
+
+All new code lives in `E:\KLIPAURA\`. If a file path starts with anything other than `E:\KLIPAURA\` you are working in the wrong place.
+
+## N8N — PERMANENTLY REMOVED
+
+There are no n8n workflows in KLIPAURA. If you find yourself writing a workflow JSON file or referencing n8n APIs, stop. All orchestration is Python-native workers and the `schedule` library.
