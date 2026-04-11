@@ -1,14 +1,24 @@
 # Mission Control — Next.js 14 (App Router) + standalone `next build` output
-# In Railway: set **Root Directory** to `klip-mission-control` for this service.
 #
-# Bind 0.0.0.0: platforms often set HOSTNAME to the container id; Next would listen on the
-# wrong interface without --hostname (see docker-entrypoint.sh). PORT is read by Next from env.
+# Railway dashboard (KLIPAURA / frontend service) — REQUIRED:
+#   Root Directory:  klip-mission-control   (NOT repo root — root uses Dockerfile → HITL API only)
+#   After env changes to NEXT_PUBLIC_*:  Deploy → "Clear build cache" + Redeploy
+#
+# Build-time env (baked into client bundle — set on this service, then rebuild):
+#   NEXT_PUBLIC_API_BASE_URL = https://<your-public-Mission-Control-API-host>
+#     Point at the service running FastAPI `main.py` (port 8000), not only `hitl_server`,
+#     or Avatar Studio + /api/v1/* will not match. See README.md "Avatar Studio / Mission Control API".
+#   Optional: NEXT_PUBLIC_GIT_SHA, NEXT_PUBLIC_HITL_URL, CORS on API side for that origin.
+#
+# `package.json` start script uses `next start --hostname 0.0.0.0`; Railway sets PORT automatically.
 
 [build]
 builder = "NIXPACKS"
+# Explicit install + build so Nixpacks never serves a stale or wrong workspace (monorepo-safe when Root Directory is set).
+buildCommand = "npm ci && npm run build"
 
 [deploy]
-startCommand = "npm run start"
+startCommand = "npm start"
 restartPolicyType = "ON_FAILURE"
 healthcheckPath = "/health"
 healthcheckTimeout = 60
