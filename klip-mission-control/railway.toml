@@ -10,5 +10,6 @@ builder = "NIXPACKS"
 [deploy]
 startCommand = "npm run start"
 restartPolicyType = "ON_FAILURE"
-healthcheckPath = "/api/health"
-healthcheckTimeout = 60
+# Next-only liveness — see `src/app/health/route.ts` (does not proxy to FastAPI).
+healthcheckPath = "/health"
+healthcheckTimeout = 30

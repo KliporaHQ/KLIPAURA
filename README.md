@@ -14,7 +14,7 @@ This monorepo uses **config-as-code** at the service root:
 **Recommended: three services**
 
 1. **API** — root `Dockerfile` builds Python + `uvicorn hitl_server` (listens on **`$PORT`**; defaults to 8080 locally). Health: `GET /health`.
-2. **Mission Control** — Nixpacks runs `npm ci` / `npm install`, **`npm run build`** (`next build`, **standalone** output), then **`npm run start`**. Health: `GET /api/health`.
+2. **Mission Control** — Nixpacks runs `npm ci` / `npm install`, **`npm run build`** (`next build`, **standalone** output), then **`npm run start`**. **Railway healthcheck:** `GET /health` (fast Next route in `src/app/health/route.ts`). For full-stack probes that hit FastAPI + Redis on loopback, use `GET /api/health` instead.
 3. **Worker** — same image or Nixpacks from repo root; start: `python klip-avatar/worker.py`. Must share **`REDIS_URL`** with the API.
 
 **Quick start**
