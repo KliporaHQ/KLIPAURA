@@ -1,6 +1,8 @@
-# Mission Control — Next.js 14 (App Router) + `npm start` (standalone output)
+# Mission Control — Next.js 14 (App Router) + standalone `next build` output
 # In Railway: set **Root Directory** to `klip-mission-control` for this service.
-# Build runs `next build` (see package.json); start serves the standalone server.
+#
+# Bind 0.0.0.0: platforms often set HOSTNAME to the container id; Next would listen on the
+# wrong interface without --hostname (see docker-entrypoint.sh). PORT is read by Next from env.
 
 [build]
 builder = "NIXPACKS"
