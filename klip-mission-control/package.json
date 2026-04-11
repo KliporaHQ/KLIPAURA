@@ -9,7 +9,7 @@
     "dev": "next dev",
     "dev:next": "powershell -ExecutionPolicy Bypass -File ./scripts/run-next-dev.ps1",
     "build": "next build",
-    "start": "next start --hostname 0.0.0.0",
+    "start": "next start --hostname 0.0.0.0 -p 8080",
     "lint": "next lint",
     "clean": "node -e \"try{require('fs').rmSync('.next',{recursive:true,force:true})}catch(e){if(e.code!=='ENOENT')throw e}\"",
     "dev:clean": "npm run clean && next dev",
