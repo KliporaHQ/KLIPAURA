@@ -1,0 +1,12 @@
+# KLIPAURA — HITL / enqueue API (repo root)
+# Duplicate of `railway.toml` for teams that prefer a dotfile name.
+# Railway CLI and dashboard resolve `railway.toml` first; keep both in sync.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+healthcheckPath = "/health"
+healthcheckTimeout = 30

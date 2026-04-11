@@ -91,7 +91,7 @@ function SpringButton({
       whileHover={reduce || disabled ? undefined : { scale: 1.035, y: -1 }}
       whileTap={reduce || disabled ? undefined : { scale: 0.94 }}
       transition={springBtn}
-      className={className}
+      className={`touch-manipulation ${className ?? ''}`}
     >
       {children}
     </motion.button>
@@ -309,12 +309,12 @@ export default function AvatarStudioPage() {
 
   if (!loggedIn && !mcSkipLogin()) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 px-4">
+      <div className="min-h-[100dvh] min-h-screen flex flex-col items-center justify-center bg-slate-950 px-4 safe-pt safe-pb">
         <Loader2 className="w-10 h-10 text-cyan-400 animate-spin mb-4" />
         <p className="text-slate-400 text-sm mb-6">Checking your session…</p>
         <Link
           href="/"
-          className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium px-5 py-2.5"
+          className="inline-flex items-center justify-center gap-2 min-h-12 w-full max-w-sm rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium px-5 py-3 touch-manipulation"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Dashboard
@@ -327,10 +327,10 @@ export default function AvatarStudioPage() {
   const previewBusy = busyGen || busyLip
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="min-h-[100dvh] min-h-screen bg-slate-950 text-slate-100">
       {toast && (
         <div
-          className={`fixed top-4 right-4 z-[100] max-w-md px-4 py-3 rounded-xl border text-sm shadow-xl ${
+          className={`fixed z-[100] top-3 left-3 right-3 sm:top-4 sm:left-auto sm:right-4 sm:max-w-md px-4 py-3 rounded-xl border text-sm shadow-xl safe-pt ${
             toast.type === 'ok'
               ? 'bg-emerald-950/95 border-emerald-700 text-emerald-100'
               : 'bg-red-950/95 border-red-800 text-red-100'
@@ -341,39 +341,39 @@ export default function AvatarStudioPage() {
         </div>
       )}
 
-      <header className="border-b border-cyan-500/20 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="p-2 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/10 border border-cyan-500/30">
-              <UserCircle2 className="w-7 h-7 text-cyan-300" />
+      <header className="border-b border-cyan-500/20 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40 safe-pt">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 xl:px-8 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/10 border border-cyan-500/30 shrink-0">
+              <UserCircle2 className="w-6 h-6 sm:w-7 sm:h-7 text-cyan-300" />
             </div>
-            <div>
-              <h1 className="text-lg font-semibold text-white tracking-tight">Avatar Studio</h1>
-              <p className="text-xs text-cyan-200/70">AI portraits · voice · lip-sync</p>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-semibold text-white tracking-tight truncate">Avatar Studio</h1>
+              <p className="text-[10px] sm:text-xs text-cyan-200/70 truncate">AI portraits · voice · lip-sync</p>
             </div>
           </div>
           <Link
             href="/"
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-600 bg-slate-900/80 px-4 py-2 text-sm text-slate-200 hover:border-cyan-500/40 hover:text-cyan-100 transition-colors"
+            className="inline-flex items-center justify-center gap-2 min-h-12 sm:min-h-0 rounded-xl border border-slate-600 bg-slate-900/80 px-4 py-2.5 sm:py-2 text-sm text-slate-200 hover:border-cyan-500/40 hover:text-cyan-100 transition-colors w-full sm:w-auto touch-manipulation"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4 shrink-0" />
             Back to Dashboard
           </Link>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6 md:py-10 space-y-10">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10">
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 xl:px-10 2xl:px-12 py-5 sm:py-6 md:py-10 space-y-8 sm:space-y-10 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-10 lg:items-start min-h-0">
           {/* Left: prompt + presets */}
-          <section className="space-y-5">
-            <div className="rounded-2xl border border-cyan-500/25 bg-slate-900/50 p-5 md:p-6 shadow-lg shadow-cyan-950/20">
+          <section className="space-y-4 sm:space-y-5 min-w-0">
+            <div className="rounded-2xl border border-cyan-500/25 bg-slate-900/50 p-4 sm:p-5 md:p-6 shadow-lg shadow-cyan-950/20">
               <label className="block text-sm font-medium text-cyan-100/90 mb-2">Describe your avatar</label>
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Example: Confident tech reviewer, subtle smile, soft daylight from a window…"
                 rows={6}
-                className="w-full rounded-xl border border-slate-600/80 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 outline-none resize-y min-h-[140px]"
+                className="w-full rounded-xl border border-slate-600/80 bg-slate-950/70 px-4 py-3 text-base sm:text-sm leading-relaxed text-slate-100 placeholder:text-slate-500 focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 outline-none resize-y min-h-[168px] sm:min-h-[140px]"
               />
               <AnimatePresence>
                 {promptEmpty ? (
@@ -401,25 +401,25 @@ export default function AvatarStudioPage() {
               </AnimatePresence>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <Field label="Display name (optional)">
                 <input
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="e.g. Tech Reviewer"
-                  className="w-full rounded-xl border border-slate-600 bg-slate-950/70 px-3 py-2.5 text-sm focus:border-cyan-500/50 outline-none"
+                  className="w-full min-h-12 rounded-xl border border-slate-600 bg-slate-950/70 px-3 py-2.5 text-base sm:text-sm focus:border-cyan-500/50 outline-none touch-manipulation"
                 />
               </Field>
-              <PresetSelect label="Age" value={age} onChange={setAge} options={PRESETS.age} />
-              <PresetSelect label="Look" value={look} onChange={setLook} options={PRESETS.look} />
-              <PresetSelect label="Outfit" value={outfit} onChange={setOutfit} options={PRESETS.outfit} />
-              <PresetSelect
+              <PresetField label="Age" value={age} onChange={setAge} options={PRESETS.age} />
+              <PresetField label="Look" value={look} onChange={setLook} options={PRESETS.look} />
+              <PresetField label="Outfit" value={outfit} onChange={setOutfit} options={PRESETS.outfit} />
+              <PresetField
                 label="Personality"
                 value={personality}
                 onChange={setPersonality}
                 options={PRESETS.personality}
               />
-              <PresetSelect
+              <PresetField
                 label="Voice tone"
                 value={voiceTone}
                 onChange={setVoiceTone}
@@ -430,17 +430,17 @@ export default function AvatarStudioPage() {
             <SpringButton
               onClick={() => void runGenerate()}
               disabled={busyGen || promptEmpty}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 text-white font-semibold text-sm px-8 py-3.5 shadow-lg shadow-cyan-900/30"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 min-h-12 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 text-white font-semibold text-sm px-8 py-3.5 shadow-lg shadow-cyan-900/30"
             >
               {busyGen ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
               {busyGen ? 'Creating…' : 'Generate'}
             </SpringButton>
           </section>
 
-          {/* Right: preview + actions */}
-          <section className="space-y-5">
+          {/* Right: preview + actions — portrait on phones; square on sm+; min size protects foldable inner + cover */}
+          <section className="space-y-4 sm:space-y-5 min-w-0 lg:min-w-[min(100%,28rem)]">
             <div className="rounded-2xl border border-cyan-500/25 bg-slate-900/40 overflow-hidden">
-              <div className="relative aspect-square max-h-[min(420px,80vw)] w-full mx-auto bg-gradient-to-b from-slate-800/50 to-slate-950 flex items-center justify-center border-b border-cyan-500/10">
+              <div className="relative w-full max-w-lg mx-auto aspect-[9/16] max-[430px]:max-h-[min(78dvh,720px)] sm:aspect-square sm:max-h-[min(420px,80vw)] min-h-[240px] bg-gradient-to-b from-slate-800/50 to-slate-950 flex items-center justify-center border-b border-cyan-500/10">
                 <AnimatePresence mode="wait">
                   {previewSrc ? (
                     <motion.img
@@ -524,11 +524,11 @@ export default function AvatarStudioPage() {
                   )}
                 </AnimatePresence>
               </div>
-              <div className="p-4 md:p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-3 sm:p-4 md:p-5 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                 <SpringButton
                   onClick={() => void runGenerate()}
                   disabled={busyGen || promptEmpty}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-500/35 bg-cyan-950/30 hover:bg-cyan-900/40 text-cyan-100 text-sm font-medium py-3 disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 min-h-12 rounded-xl border border-cyan-500/35 bg-cyan-950/30 hover:bg-cyan-900/40 text-cyan-100 text-sm font-medium py-3 disabled:opacity-50 w-full sm:w-auto"
                 >
                   <RefreshCw className={`w-4 h-4 ${busyGen ? 'animate-spin' : ''}`} />
                   Regenerate
@@ -536,7 +536,7 @@ export default function AvatarStudioPage() {
                 <SpringButton
                   onClick={() => void runTestVoice()}
                   disabled={busyVoice || !session}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-600 bg-slate-800/50 hover:bg-slate-800 text-slate-100 text-sm font-medium py-3 disabled:opacity-40"
+                  className="inline-flex items-center justify-center gap-2 min-h-12 rounded-xl border border-slate-600 bg-slate-800/50 hover:bg-slate-800 text-slate-100 text-sm font-medium py-3 disabled:opacity-40 w-full sm:w-auto"
                 >
                   {busyVoice ? <Loader2 className="w-4 h-4 animate-spin" /> : <Volume2 className="w-4 h-4" />}
                   Test Voice
@@ -544,7 +544,7 @@ export default function AvatarStudioPage() {
                 <SpringButton
                   onClick={() => void runTestLipsync()}
                   disabled={busyLip || !session}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-600 bg-slate-800/50 hover:bg-slate-800 text-slate-100 text-sm font-medium py-3 disabled:opacity-40"
+                  className="inline-flex items-center justify-center gap-2 min-h-12 rounded-xl border border-slate-600 bg-slate-800/50 hover:bg-slate-800 text-slate-100 text-sm font-medium py-3 disabled:opacity-40 w-full sm:w-auto"
                 >
                   {busyLip ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
                   Test Lip-Sync
@@ -552,7 +552,7 @@ export default function AvatarStudioPage() {
                 <SpringButton
                   onClick={() => void runSavePersona()}
                   disabled={busySave || !session}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white text-sm font-semibold py-3 disabled:opacity-40"
+                  className="inline-flex items-center justify-center gap-2 min-h-12 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white text-sm font-semibold py-3 disabled:opacity-40 w-full sm:min-w-0 sm:w-auto sm:col-span-2"
                 >
                   {busySave ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   Save as Persona
@@ -668,52 +668,91 @@ function SavedPersonasRow({
     return () => ro.disconnect()
   }, [personas])
 
+  const cardClass =
+    'w-[11.25rem] sm:w-44 shrink-0 snap-center overflow-hidden rounded-xl border border-slate-700 bg-slate-900/60 shadow-md shadow-black/20'
+
   return (
-    <div ref={outerRef} className="relative w-full overflow-hidden rounded-xl pb-1">
-      <motion.div
-        ref={innerRef}
-        className="flex w-max cursor-grab gap-4 pb-2 pt-1 active:cursor-grabbing"
-        drag={reduceMotion ? false : 'x'}
-        dragConstraints={dragCx}
-        dragElastic={0.07}
-        dragTransition={{ bounceStiffness: 320, bounceDamping: 28 }}
-        variants={reduceMotion ? rowListReduced : rowList}
-        initial="hidden"
-        animate="show"
+    <div className="relative w-full rounded-xl pb-1">
+      {/* Touch / foldables: native horizontal scroll + snap; desktop: Framer drag */}
+      <div
+        className="md:hidden w-full overflow-x-auto overflow-y-hidden overscroll-x-contain snap-x snap-mandatory scrollbar-touch rounded-xl pb-2 pt-1 -mx-1 px-1"
+        style={{ WebkitOverflowScrolling: 'touch' }}
       >
-        {personas.map((p) => (
-          <motion.div
-            key={p.persona_id}
-            variants={reduceMotion ? rowItemReduced : rowItem}
-            className="w-40 shrink-0 overflow-hidden rounded-xl border border-slate-700 bg-slate-900/60 shadow-md shadow-black/20"
-          >
-            <div className="relative aspect-square bg-slate-800">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.image_url} alt="" className="h-full w-full object-cover" />
-            </div>
-            <div className="space-y-1.5 p-2">
-              <p className="truncate text-xs font-medium text-slate-200" title={p.name}>
-                {p.name || 'Persona'}
-              </p>
-              <div className="flex flex-col gap-1">
-                <Link
-                  href={`/avatar?avatar_id=${encodeURIComponent(p.avatar_id)}&persona_id=${encodeURIComponent(p.persona_id)}`}
-                  className="block w-full rounded-lg bg-cyan-600/90 py-1.5 text-center text-[11px] font-semibold text-white hover:bg-cyan-500"
-                >
-                  Video only
-                </Link>
-                <Link
-                  href={`/avatar?avatar_id=${encodeURIComponent(p.avatar_id)}&persona_id=${encodeURIComponent(p.persona_id)}&generate_funnel=1`}
-                  className="block w-full rounded-lg border border-emerald-500/50 bg-emerald-950/40 py-1.5 text-center text-[11px] font-semibold text-emerald-100 hover:bg-emerald-900/50"
-                >
-                  Video + Funnel
-                </Link>
+        <div className="flex w-max gap-3 sm:gap-4 pr-2">
+          {personas.map((p) => (
+            <div key={p.persona_id} className={cardClass}>
+              <div className="relative aspect-square bg-slate-800">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.image_url} alt="" className="h-full w-full object-cover" />
+              </div>
+              <div className="space-y-2 p-2">
+                <p className="truncate text-xs font-medium text-slate-200" title={p.name}>
+                  {p.name || 'Persona'}
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  <Link
+                    href={`/avatar?avatar_id=${encodeURIComponent(p.avatar_id)}&persona_id=${encodeURIComponent(p.persona_id)}`}
+                    className="flex items-center justify-center min-h-12 w-full rounded-lg bg-cyan-600/90 px-2 text-center text-[11px] font-semibold text-white hover:bg-cyan-500 touch-manipulation"
+                  >
+                    Video only
+                  </Link>
+                  <Link
+                    href={`/avatar?avatar_id=${encodeURIComponent(p.avatar_id)}&persona_id=${encodeURIComponent(p.persona_id)}&generate_funnel=1`}
+                    className="flex items-center justify-center min-h-12 w-full rounded-lg border border-emerald-500/50 bg-emerald-950/40 px-2 text-center text-[11px] font-semibold text-emerald-100 hover:bg-emerald-900/50 touch-manipulation"
+                  >
+                    Video + Funnel
+                  </Link>
+                </div>
               </div>
             </div>
-          </motion.div>
-        ))}
-      </motion.div>
-      <p className="mt-1 text-center text-[10px] text-slate-600 md:hidden">Drag sideways to browse</p>
+          ))}
+        </div>
+      </div>
+
+      <div ref={outerRef} className="relative hidden md:block w-full overflow-hidden rounded-xl pb-1">
+        <motion.div
+          ref={innerRef}
+          className="flex w-max cursor-grab gap-4 pb-2 pt-1 active:cursor-grabbing"
+          drag={reduceMotion ? false : 'x'}
+          dragConstraints={dragCx}
+          dragElastic={0.07}
+          dragTransition={{ bounceStiffness: 320, bounceDamping: 28 }}
+          variants={reduceMotion ? rowListReduced : rowList}
+          initial="hidden"
+          animate="show"
+        >
+          {personas.map((p) => (
+            <motion.div key={p.persona_id} variants={reduceMotion ? rowItemReduced : rowItem} className={cardClass}>
+              <div className="relative aspect-square bg-slate-800">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.image_url} alt="" className="h-full w-full object-cover" />
+              </div>
+              <div className="space-y-2 p-2">
+                <p className="truncate text-xs font-medium text-slate-200" title={p.name}>
+                  {p.name || 'Persona'}
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  <Link
+                    href={`/avatar?avatar_id=${encodeURIComponent(p.avatar_id)}&persona_id=${encodeURIComponent(p.persona_id)}`}
+                    className="flex items-center justify-center min-h-11 w-full rounded-lg bg-cyan-600/90 py-2 text-center text-[11px] font-semibold text-white hover:bg-cyan-500 touch-manipulation"
+                  >
+                    Video only
+                  </Link>
+                  <Link
+                    href={`/avatar?avatar_id=${encodeURIComponent(p.avatar_id)}&persona_id=${encodeURIComponent(p.persona_id)}&generate_funnel=1`}
+                    className="flex items-center justify-center min-h-11 w-full rounded-lg border border-emerald-500/50 bg-emerald-950/40 py-2 text-center text-[11px] font-semibold text-emerald-100 hover:bg-emerald-900/50 touch-manipulation"
+                  >
+                    Video + Funnel
+                  </Link>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </motion.div>
+      </div>
+      <p className="mt-2 text-center text-[10px] text-slate-600 md:hidden">
+        Swipe sideways — cards snap into place
+      </p>
     </div>
   )
 }
@@ -727,7 +766,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function PresetSelect({
+function PresetField({
   label,
   value,
   onChange,
@@ -739,19 +778,47 @@ function PresetSelect({
   options: string[]
 }) {
   return (
-    <Field label={label}>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-slate-600 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-100 focus:border-cyan-500/50 outline-none"
+    <div className="space-y-2 sm:space-y-1.5 min-w-0">
+      <span className="block text-xs font-medium text-slate-400">{label}</span>
+      <div className="hidden md:block">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full min-h-12 rounded-xl border border-slate-600 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-100 focus:border-cyan-500/50 outline-none touch-manipulation"
+        >
+          {options.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div
+        className="md:hidden flex gap-2 overflow-x-auto overscroll-x-contain snap-x snap-mandatory scrollbar-touch pb-1 -mx-0.5 px-0.5"
+        role="listbox"
+        aria-label={label}
       >
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-    </Field>
+        {options.map((o) => {
+          const active = value === o
+          return (
+            <button
+              key={o}
+              type="button"
+              role="option"
+              aria-selected={active}
+              onClick={() => onChange(o)}
+              className={`shrink-0 snap-start min-h-12 max-w-[min(100%,18rem)] rounded-full border px-3.5 py-2 text-left text-xs font-medium leading-snug transition-colors touch-manipulation ${
+                active
+                  ? 'border-cyan-500/60 bg-cyan-950/55 text-cyan-50 shadow-sm shadow-cyan-950/40'
+                  : 'border-slate-600 bg-slate-950/80 text-slate-300 hover:border-slate-500'
+              }`}
+            >
+              {o}
+            </button>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 

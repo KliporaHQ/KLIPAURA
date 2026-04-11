@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -7,6 +7,19 @@ export const metadata: Metadata = {
   icons: {
     icon: '/favicon.ico',
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+  },
+}
+
+/** Mobile + foldables: stable scale; allow pinch-zoom for accessibility; notch / hinge safe-areas via CSS */
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: 'cover',
+  themeColor: '#0f172a',
 }
 
 export default function RootLayout({
@@ -15,7 +28,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className="h-full">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -24,7 +37,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="antialiased text-slate-100" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+      <body
+        className="antialiased text-slate-100 min-h-[100dvh] min-h-screen touch-manipulation"
+        style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+      >
         {children}
       </body>
     </html>

@@ -474,7 +474,7 @@ export default function MissionControl() {
       type="button"
       key={tab}
       onClick={() => setActiveTab(tab)}
-      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+      className={`w-full flex items-center gap-3 px-3 py-2.5 min-h-11 rounded-lg text-sm font-medium transition-colors touch-manipulation ${
         activeTab === tab
           ? 'bg-klipaura-600/25 text-slate-100 border border-klipaura-500/40'
           : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/80 border border-transparent'
@@ -482,6 +482,22 @@ export default function MissionControl() {
     >
       {icon}
       {!sidebarCollapsed && label}
+    </button>
+  )
+
+  const mobileNavBtn = (tab: MainTab, short: string, icon: React.ReactNode) => (
+    <button
+      type="button"
+      key={`m-${tab}`}
+      onClick={() => setActiveTab(tab)}
+      className={`flex flex-col items-center justify-center gap-0.5 min-h-[3.25rem] px-0.5 rounded-xl text-[10px] font-semibold transition-colors touch-manipulation leading-tight ${
+        activeTab === tab
+          ? 'text-slate-100 bg-klipaura-600/25 border border-klipaura-500/40'
+          : 'text-slate-500 border border-transparent active:bg-slate-800/80'
+      }`}
+    >
+      <span className="shrink-0">{icon}</span>
+      <span className="text-center w-full truncate px-0.5">{short}</span>
     </button>
   )
 
@@ -539,7 +555,7 @@ export default function MissionControl() {
   }
 
   return (
-    <div className="min-h-screen flex bg-slate-950 text-slate-100">
+    <div className="min-h-[100dvh] min-h-screen flex bg-slate-950 text-slate-100 relative">
       {toast && (
         <div
           className={`fixed top-4 right-4 z-[100] max-w-md px-4 py-3 rounded-lg shadow-xl border text-sm ${
@@ -554,7 +570,7 @@ export default function MissionControl() {
       )}
 
       <aside
-        className={`shrink-0 border-r border-slate-800 bg-slate-900/95 flex flex-col transition-all duration-200 ${
+        className={`hidden md:flex shrink-0 border-r border-slate-800 bg-slate-900/95 flex-col transition-all duration-200 ${
           sidebarCollapsed ? 'w-[4.5rem]' : 'w-56'
         }`}
       >
@@ -638,7 +654,7 @@ export default function MissionControl() {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-40 px-4 py-3 flex flex-wrap items-center gap-3 justify-between">
+        <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-40 px-3 sm:px-4 py-3 flex flex-wrap items-center gap-3 justify-between safe-pt">
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <span className={`status-dot ${metrics?.redis_connected ? 'online' : 'offline'}`} />
             <span className="text-slate-400">
@@ -700,7 +716,38 @@ export default function MissionControl() {
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-6 overflow-y-auto">
+        <div className="md:hidden border-b border-slate-800/90 bg-slate-950/80 px-2 py-2 overflow-x-auto scrollbar-touch flex gap-2 shrink-0">
+          <Link
+            href="/avatar-studio"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-950/30 px-3 py-2 text-xs font-medium text-cyan-100 touch-manipulation"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            Avatar Studio
+          </Link>
+          <Link
+            href="/credits"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-amber-500/25 bg-amber-950/20 px-3 py-2 text-xs font-medium text-amber-100/95 touch-manipulation"
+          >
+            <Coins className="w-3.5 h-3.5" />
+            Credits
+          </Link>
+          <Link
+            href="/mc/avatars"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-sky-500/25 bg-sky-950/20 px-3 py-2 text-xs font-medium text-sky-100/95 touch-manipulation"
+          >
+            <Users className="w-3.5 h-3.5" />
+            Avatars
+          </Link>
+          <Link
+            href="/mc/pipeline"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-950/20 px-3 py-2 text-xs font-medium text-emerald-100/95 touch-manipulation"
+          >
+            <Workflow className="w-3.5 h-3.5" />
+            Pipeline
+          </Link>
+        </div>
+
+        <main className="flex-1 p-3 sm:p-4 md:p-6 overflow-y-auto pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-6">
           {activeTab === 'overview' && (
             <div className="space-y-8 max-w-7xl mx-auto">
               {(hitlJobs.length > 0 || (metrics?.jobs_by_status?.awaiting_hitl ?? 0) > 0) && (
@@ -1142,10 +1189,22 @@ export default function MissionControl() {
           )}
         </main>
 
-        <footer className="border-t border-slate-800 py-4 text-center text-slate-600 text-xs">
+        <footer className="hidden md:block border-t border-slate-800 py-4 text-center text-slate-600 text-xs">
           KLIPAURA OS · Mission Control · Video pipeline: enqueue from Run pipeline → klip-avatar worker → HITL
         </footer>
       </div>
+
+      <nav
+        className="md:hidden fixed bottom-0 inset-x-0 z-50 border-t border-slate-800 bg-slate-900/95 backdrop-blur-md safe-pb grid grid-cols-6 gap-0.5 px-0.5 pt-1 shadow-[0_-12px_32px_rgba(0,0,0,0.35)]"
+        aria-label="Mission Control sections"
+      >
+        {mobileNavBtn('overview', 'Home', <LayoutDashboard className="w-5 h-5" />)}
+        {mobileNavBtn('run', 'Run', <Radar className="w-5 h-5" />)}
+        {mobileNavBtn('decisions', 'Queue', <AlertTriangle className="w-5 h-5" />)}
+        {mobileNavBtn('hitl', 'HITL', <Film className="w-5 h-5" />)}
+        {mobileNavBtn('jobs', 'Jobs', <Activity className="w-5 h-5" />)}
+        {mobileNavBtn('events', 'Events', <Zap className="w-5 h-5" />)}
+      </nav>
     </div>
   )
 }

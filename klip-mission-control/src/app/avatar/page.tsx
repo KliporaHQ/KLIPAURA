@@ -919,7 +919,7 @@ export default function AvatarMissionControlPage() {
         </aside>
 
         <nav
-          className="lg:hidden grid grid-cols-5 gap-2 p-3 border-b border-slate-800/60 bg-slate-900/50"
+          className="lg:hidden grid grid-cols-5 gap-1.5 p-2 sm:p-3 border-b border-slate-800/60 bg-slate-900/50 safe-pt"
           aria-label="Section"
         >
           {tabBtn('overview', 'Overview', <LayoutGrid className="w-4 h-4" />, true)}
@@ -929,7 +929,7 @@ export default function AvatarMissionControlPage() {
           {tabBtn('activity', 'Activity', <Activity className="w-4 h-4" />, true)}
         </nav>
 
-        <main className="flex-1 min-w-0 w-full px-3 sm:px-4 lg:px-8 py-4 sm:py-6 pb-8 sm:pb-10">
+        <main className="flex-1 min-w-0 w-full px-3 sm:px-4 xl:px-10 2xl:px-12 py-4 sm:py-6 pb-[calc(2rem+env(safe-area-inset-bottom))] sm:pb-10">
           {tab === 'overview' && (
             <div className="space-y-6 sm:space-y-8 w-full max-w-[1200px] mx-auto">
               <div className="px-0.5">

@@ -1,13 +1,30 @@
 # KLIPAURA
 
-## 🚀 Deploy to Railway (One-Click)
+## 🚀 Deploy to Railway
 
-1. Go to [Railway.app](https://railway.app) → New Project → Deploy from GitHub → select **KLIPAURA**
-2. Add these Environment Variables (from `.env.example`):
-   - `WAVESPEED_API_KEY`, `ELEVENLABS_API_KEY`, `R2_*` keys, `REDIS_URL`, etc.
-   - `NEXT_PUBLIC_MC_SKIP_LOGIN=1` (optional for easier local-like dev)
-3. Railway will auto-detect services from `.railway.toml`
-4. Deploy — you will get live URLs for the dashboard and API.
+Mission Control is **mobile-first** and **foldable-friendly** (large phones and devices like Galaxy Z Fold — responsive layout, safe areas, bottom navigation on small screens).
+
+This monorepo uses **config-as-code** at the service root:
+
+| Railway service | Root directory | Config file |
+|-----------------|----------------|-------------|
+| **HITL / enqueue API** | `.` (repo root) | `railway.toml` (alias: `.railway.toml`) |
+| **Mission Control UI** (Next.js App Router) | `klip-mission-control` | `klip-mission-control/railway.toml` |
+
+**Recommended: three services**
+
+1. **API** — root `Dockerfile` builds Python + `uvicorn hitl_server` (listens on **`$PORT`**; defaults to 8080 locally). Health: `GET /health`.
+2. **Mission Control** — Nixpacks runs `npm ci` / `npm install`, **`npm run build`** (`next build`, **standalone** output), then **`npm run start`**. Health: `GET /api/health`.
+3. **Worker** — same image or Nixpacks from repo root; start: `python klip-avatar/worker.py`. Must share **`REDIS_URL`** with the API.
+
+**Quick start**
+
+1. [Railway.app](https://railway.app) → New Project → Deploy from GitHub → **KLIPAURA**.
+2. Add **three** services with the root directories above (or start with API + UI).
+3. Set variables from **`.env.example`** (never commit real `.env`):
+   - **API / worker:** `WAVESPEED_API_KEY`, `ELEVENLABS_API_KEY`, `R2_*`, `REDIS_URL`, `GROQ_API_KEY`, etc.
+   - **Mission Control (build + runtime):** `NEXT_PUBLIC_API_BASE_URL=https://<your-api-host>` (browser → API; required when UI and API are different origins). Optional: `NEXT_PUBLIC_MC_SKIP_LOGIN=1` for dev-like access.
+4. Attach domains (e.g. API + `app.` for the dashboard). See **`docs/DEPLOYMENT.md`** for CORS (`CORS_ALLOW_ORIGINS`) and worker env mirroring **`klip-avatar/core_v1/.env`**.
 
 **Autonomous AI affiliate short-form video factory** (clean repo, consolidated from earlier iterations).
 

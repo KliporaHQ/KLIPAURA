@@ -1,0 +1,12 @@
+# Mission Control — Next.js 14 (App Router) + `npm start` (standalone output)
+# In Railway: set **Root Directory** to `klip-mission-control` for this service.
+# Build runs `next build` (see package.json); start serves the standalone server.
+
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "npm run start"
+restartPolicyType = "ON_FAILURE"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 60

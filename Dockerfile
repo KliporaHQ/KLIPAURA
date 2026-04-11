@@ -17,4 +17,5 @@ ENV PYTHONPATH=/app:/app/klip-scanner:/app/klip-funnel
 
 EXPOSE 8080
 
-CMD ["uvicorn", "hitl_server:app", "--app-dir", "klip-dispatch", "--host", "0.0.0.0", "--port", "8080"]
+# Railway and other hosts set PORT; default 8080 for local/docker-compose.
+CMD ["sh", "-c", "uvicorn hitl_server:app --app-dir klip-dispatch --host 0.0.0.0 --port ${PORT:-8080}"]
