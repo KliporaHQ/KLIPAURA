@@ -6,7 +6,6 @@
 
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm ci && npm run build && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public 2>/dev/null; true"
 
 [deploy]
 startCommand = "npm run start"
