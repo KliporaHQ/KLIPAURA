@@ -1,5 +1,14 @@
 /** @type {import('next').NextConfig} */
 const path = require('path')
+const { execSync } = require('child_process')
+
+function gitSha() {
+  try {
+    return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim()
+  } catch {
+    return 'unknown'
+  }
+}
 
 /**
  * Next rewrites run inside the MC Docker image and must hit uvicorn on loopback.
@@ -64,6 +73,9 @@ const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   distDir: resolveDistDir(),
+  env: {
+    NEXT_PUBLIC_GIT_SHA: process.env.NEXT_PUBLIC_GIT_SHA || gitSha(),
+  },
   async rewrites() {
     // Do NOT use `/api/:path*` — it maps `/api/health` → FastAPI `/api/health` (404).
     // Health is served by `src/app/api/health/route.ts` (proxies to GET /health).

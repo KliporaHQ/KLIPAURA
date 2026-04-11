@@ -2,9 +2,16 @@
  * Shared Mission Control browser API helpers (session token + same-origin base).
  */
 
-/** Default operator fields.  Read from env at build time; empty if not set. */
-export const MC_DEFAULT_LOGIN_USERNAME = process.env.NEXT_PUBLIC_MC_DEFAULT_USER || ''
-export const MC_DEFAULT_LOGIN_PASSWORD = process.env.NEXT_PUBLIC_MC_DEFAULT_PASS || ''
+/** Default operator fields.  Read from env at build time; empty if not set.
+ *  Supports both old (`ADMIN_USERNAME`/`ADMIN_PASSWORD`) and new (`MC_DEFAULT_USER`/`MC_DEFAULT_PASS`) names. */
+export const MC_DEFAULT_LOGIN_USERNAME =
+  process.env.NEXT_PUBLIC_MC_DEFAULT_USER ||
+  process.env.NEXT_PUBLIC_ADMIN_USERNAME ||
+  ''
+export const MC_DEFAULT_LOGIN_PASSWORD =
+  process.env.NEXT_PUBLIC_MC_DEFAULT_PASS ||
+  process.env.NEXT_PUBLIC_ADMIN_PASSWORD ||
+  ''
 
 /**
  * When true, dashboard /avatar /credits skip the sign-in screen (testing).
@@ -33,8 +40,17 @@ export function setMcToken(t: string | null): void {
 
 export function getApiBase(): string {
   return (
-    (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || '').trim()
+    (
+      process.env.NEXT_PUBLIC_API_BASE_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      process.env.NEXT_PUBLIC_MC_API_URL ||
+      ''
+    ).trim()
   )
+}
+
+export function getGitSha(): string {
+  return process.env.NEXT_PUBLIC_GIT_SHA || 'dev'
 }
 
 /**

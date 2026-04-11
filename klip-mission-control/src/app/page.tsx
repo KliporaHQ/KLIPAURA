@@ -30,6 +30,7 @@ import { RunPipelinePanel } from '../components/RunPipelinePanel'
 import { PregenDecisionPanel } from '../components/PregenDecisionPanel'
 import {
   getApiBase,
+  getGitSha,
   getHitlPublicUrl,
   mcSkipLogin,
   MC_DEFAULT_LOGIN_PASSWORD,
@@ -537,6 +538,9 @@ export default function MissionControl() {
             ). Values must match exactly (case-sensitive). Set <code className="text-slate-500">JWT_SECRET_KEY</code>{' '}
             on the server. If this still fails, inspect Network →{' '}
             <code className="text-slate-500">/api/v1/auth/login</code> (401 = wrong user/pass or empty password env).
+          </p>
+          <p className="text-[10px] text-slate-700 mt-3 text-center font-mono tracking-wide" id="mc-build-sha">
+            build {getGitSha()}
           </p>
         </div>
       </div>
@@ -1190,7 +1194,7 @@ export default function MissionControl() {
         </main>
 
         <footer className="hidden md:block border-t border-slate-800 py-4 text-center text-slate-600 text-xs">
-          KLIPAURA OS · Mission Control · Video pipeline: enqueue from Run pipeline → klip-avatar worker → HITL
+          KLIPAURA OS · Mission Control · build <span className="font-mono">{getGitSha()}</span>
         </footer>
       </div>
 
