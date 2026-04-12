@@ -18,7 +18,7 @@ export const MC_DEFAULT_LOGIN_PASSWORD =
  * Set `NEXT_PUBLIC_MC_SKIP_LOGIN=0` (or `false` / `off` / `no`) at build time to require login again.
  * Default `MC_LOGIN_GATE_TEMP_DISABLED` is false so production requires login unless env explicitly enables skip.
  */
-const MC_LOGIN_GATE_TEMP_DISABLED = false
+const MC_LOGIN_GATE_TEMP_DISABLED = true
 
 export function mcSkipLogin(): boolean {
   const v = (process.env.NEXT_PUBLIC_MC_SKIP_LOGIN || '').trim().toLowerCase()
