@@ -13,9 +13,7 @@
 # `package.json` start script uses `next start --hostname 0.0.0.0`; Railway sets PORT automatically.
 
 [build]
-builder = "NIXPACKS"
-# Explicit install + build so Nixpacks never serves a stale or wrong workspace (monorepo-safe when Root Directory is set).
-buildCommand = "npm ci && npm run build"
+buildCommand = "npm install && npm run build"
 
 [deploy]
 startCommand = "npm start"
