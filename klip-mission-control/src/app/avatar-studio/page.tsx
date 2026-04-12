@@ -18,8 +18,10 @@ import {
 } from 'framer-motion'
 import {
   ArrowLeft,
+  Check,
   Loader2,
   Mic,
+  Pencil,
   RefreshCw,
   Save,
   Sparkles,
@@ -27,6 +29,7 @@ import {
   Volume2,
   UserCircle2,
   Clapperboard,
+  X,
 } from 'lucide-react'
 import { createApiFetch, getApiBase, getMcToken, mcSkipLogin } from '@/lib/mc-client'
 
@@ -599,7 +602,10 @@ export default function AvatarStudioPage() {
               No saved personas yet — generate one above.
             </div>
           ) : (
-            <SavedPersonasRow personas={saved} reduceMotion={!!reduceMotion} />
+            <SavedPersonasRow personas={saved} reduceMotion={!!reduceMotion} onRename={async (pid, name) => {
+                await api('/api/v1/avatar-studio/save-persona', { method: 'POST', body: JSON.stringify({ persona_id: pid, name }) })
+                await loadSaved()
+              }} />
           )}
         </section>
       </main>
@@ -639,13 +645,34 @@ const rowItemReduced = {
 function SavedPersonasRow({
   personas,
   reduceMotion,
+  onRename,
 }: {
   personas: StudioPersona[]
   reduceMotion: boolean
+  onRename: (personaId: string, newName: string) => Promise<void>
 }) {
   const outerRef = useRef<HTMLDivElement>(null)
   const innerRef = useRef<HTMLDivElement>(null)
   const [dragCx, setDragCx] = useState({ left: 0, right: 0 })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState('')
+  const [renameBusy, setRenameBusy] = useState(false)
+
+  const startEdit = (p: StudioPersona) => {
+    setEditingId(p.persona_id)
+    setEditingName(p.name || '')
+  }
+  const cancelEdit = () => { setEditingId(null); setEditingName('') }
+  const commitEdit = async (personaId: string) => {
+    if (!editingName.trim()) return cancelEdit()
+    setRenameBusy(true)
+    try {
+      await onRename(personaId, editingName.trim())
+      setEditingId(null)
+    } finally {
+      setRenameBusy(false)
+    }
+  }
 
   useLayoutEffect(() => {
     const outer = outerRef.current
@@ -680,9 +707,24 @@ function SavedPersonasRow({
                 <img src={p.image_url} alt="" className="h-full w-full object-cover" />
               </div>
               <div className="space-y-2 p-2">
-                <p className="truncate text-xs font-medium text-slate-200" title={p.name}>
-                  {p.name || 'Persona'}
-                </p>
+                {editingId === p.persona_id ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      autoFocus
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') void commitEdit(p.persona_id); if (e.key === 'Escape') cancelEdit() }}
+                      className="min-w-0 flex-1 rounded border border-cyan-500 bg-slate-950 px-1.5 py-0.5 text-xs text-slate-100 outline-none"
+                    />
+                    <button onClick={() => void commitEdit(p.persona_id)} disabled={renameBusy} className="text-cyan-400 hover:text-cyan-300 disabled:opacity-50"><Check className="w-3.5 h-3.5" /></button>
+                    <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300"><X className="w-3.5 h-3.5" /></button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 group">
+                    <p className="truncate text-xs font-medium text-slate-200 flex-1" title={p.name}>{p.name || 'Persona'}</p>
+                    <button onClick={() => startEdit(p)} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-slate-300 transition-opacity shrink-0"><Pencil className="w-3 h-3" /></button>
+                  </div>
+                )}
                 <div className="flex flex-col gap-1.5">
                   <Link
                     href={`/avatar?avatar_id=${encodeURIComponent(p.avatar_id)}&persona_id=${encodeURIComponent(p.persona_id)}`}
@@ -722,9 +764,24 @@ function SavedPersonasRow({
                 <img src={p.image_url} alt="" className="h-full w-full object-cover" />
               </div>
               <div className="space-y-2 p-2">
-                <p className="truncate text-xs font-medium text-slate-200" title={p.name}>
-                  {p.name || 'Persona'}
-                </p>
+                {editingId === p.persona_id ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      autoFocus
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') void commitEdit(p.persona_id); if (e.key === 'Escape') cancelEdit() }}
+                      className="min-w-0 flex-1 rounded border border-cyan-500 bg-slate-950 px-1.5 py-0.5 text-xs text-slate-100 outline-none"
+                    />
+                    <button onClick={() => void commitEdit(p.persona_id)} disabled={renameBusy} className="text-cyan-400 hover:text-cyan-300 disabled:opacity-50"><Check className="w-3.5 h-3.5" /></button>
+                    <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-300"><X className="w-3.5 h-3.5" /></button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 group">
+                    <p className="truncate text-xs font-medium text-slate-200 flex-1" title={p.name}>{p.name || 'Persona'}</p>
+                    <button onClick={() => startEdit(p)} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-slate-300 transition-opacity shrink-0"><Pencil className="w-3 h-3" /></button>
+                  </div>
+                )}
                 <div className="flex flex-col gap-1.5">
                   <Link
                     href={`/avatar?avatar_id=${encodeURIComponent(p.avatar_id)}&persona_id=${encodeURIComponent(p.persona_id)}`}
