@@ -1,10 +1,10 @@
-# KLIPAURA — HITL / enqueue API (repo root)
+# KLIPAURA — MC API (repo root)
 # In Railway: set **Root Directory** to `.` (repository root) for this service.
 # Companion UI config: `klip-mission-control/railway.toml`
 
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
+dockerfilePath = "klip-mission-control/Dockerfile.api"
 
 [deploy]
 restartPolicyType = "ON_FAILURE"
