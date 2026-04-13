@@ -45,7 +45,7 @@ def main() -> int:
         default=(os.environ.get("KLIP_TEST_PRODUCT_URL") or _DEFAULT_TEST_PRODUCT).strip(),
         help="Amazon product URL (default: Roborock short link or KLIP_TEST_PRODUCT_URL)",
     )
-    p.add_argument("--avatar-id", default="theanikaglow")
+    p.add_argument("--avatar-id", default=os.environ.get("ACTIVE_AVATAR_ID", ""))
     p.add_argument("--affiliate-program-id", default="example_program")
     p.add_argument("--timeout-sec", type=int, default=5400, help="Max wait for terminal status (default 90m)")
     p.add_argument("--poll-sec", type=float, default=8.0, help="Sleep between manifest reads")

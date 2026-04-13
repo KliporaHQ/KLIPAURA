@@ -1,0 +1,31 @@
+{
+  "_comment": "Avatar registry — source of truth for active avatar set. AvatarLoader reads this at startup. Edit status here to pause/resume avatars without redeploying.",
+  "last_updated": "2026-04-13T04:06:46Z",
+  "avatars": [
+    {
+      "avatar_id": "theanikaglow",
+      "status": "active",
+      "niches": [
+        "beauty",
+        "skincare",
+        "wellness",
+        "home",
+        "kitchen"
+      ],
+      "display_name": "Anika Glow",
+      "social_config_path": "klip-avatar/core_v1/data/avatars/theanikaglow/social_config.json"
+    },
+    {
+      "avatar_id": "anikalow",
+      "status": "paused",
+      "niches": [
+        "beauty",
+        "skincare",
+        "budget"
+      ],
+      "display_name": "Anika Low",
+      "social_config_path": "klip-avatar/core_v1/data/avatars/anikalow/social_config.json",
+      "_note": "Locked until theanikaglow hits $1K P&L threshold."
+    }
+  ]
+}

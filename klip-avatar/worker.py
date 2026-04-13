@@ -30,16 +30,40 @@ if _KLIP_FUNNEL_ROOT.is_dir() and str(_KLIP_FUNNEL_ROOT) not in sys.path:
     sys.path.insert(0, str(_KLIP_FUNNEL_ROOT))
 
 from infrastructure.avatar_registry import resolve_elevenlabs_voice_id
+from infrastructure.avatar_loader import AvatarLoader
 from infrastructure.job_state import create_manifest, touch_manifest_stage, update_manifest
-from infrastructure.queue_names import DLQ, HITL_PENDING, JOBS_PENDING, QUEUE_GLOBAL_PAUSED_KEY
+from infrastructure.product_passport import ProductPassport
+from infrastructure.queue_names import (
+    DLQ,
+    HITL_PENDING,
+    JOBS_PENDING,
+    QUEUE_GLOBAL_PAUSED_KEY,
+    WORKER_AVATAR_HEARTBEAT_KEY,
+    WORKERS_REGISTRY_KEY,
+    WORKER_HEARTBEAT_INTERVAL_SECONDS,
+    WORKER_HEARTBEAT_TTL_SECONDS,
+)
 from infrastructure.redis_client import LocalRedis, RedisConfigError, get_redis_client
 
 _MAX_RETRIES = 3
 _CORE_V1 = _REPO / "klip-avatar" / "core_v1"
 
-_WORKER_HEARTBEAT_KEY = "klip:worker:heartbeat"
-_WORKER_HEARTBEAT_TTL_SECONDS = 120
-_WORKER_HEARTBEAT_INTERVAL_SECONDS = 10
+_WORKER_HEARTBEAT_KEY = WORKER_AVATAR_HEARTBEAT_KEY
+_WORKER_HEARTBEAT_TTL_SECONDS = WORKER_HEARTBEAT_TTL_SECONDS
+_WORKER_HEARTBEAT_INTERVAL_SECONDS = WORKER_HEARTBEAT_INTERVAL_SECONDS
+
+# Per-worker identity (unique per process/host)
+WORKER_ID = f"worker-{socket.gethostname()}-{os.getpid()}"
+
+
+def _write_passport_to_workspace(job_id: str, passport: "ProductPassport") -> Path:
+    """Write passport.json to the job workspace directory. Returns the file path."""
+    jobs_dir = Path(os.getenv("JOBS_DIR", str(_REPO / "jobs"))).resolve()
+    workspace = jobs_dir / job_id
+    workspace.mkdir(parents=True, exist_ok=True)
+    passport_path = workspace / "passport.json"
+    passport_path.write_text(passport.to_json(), encoding="utf-8")
+    return passport_path
 
 _TEMPLATES_PATH = _REPO / "config" / "templates.json"
 _TEMPLATES_CACHE: dict[str, dict] | None = None
@@ -289,12 +313,17 @@ def _avatar_defaults(avatar_id: str) -> dict[str, str]:
     return out
 
 
-def _final_video_path() -> Path:
-    return _CORE_V1 / "outputs" / "final_publish" / "FINAL_VIDEO.mp4"
-
-
 def _job_video_path(job_id: str) -> Path:
     return Path(os.getenv("JOBS_DIR", str(_REPO / "jobs"))).resolve() / job_id / "FINAL_VIDEO.mp4"
+
+
+def _final_video_path(job_id: str) -> Path:
+    """Job-isolated path (pipeline writes here directly when JOB_ID + JOBS_DIR are set).
+    Falls back to the legacy shared path so old pipeline invocations still work."""
+    per_job = _job_video_path(job_id)
+    if per_job.is_file():
+        return per_job
+    return _CORE_V1 / "outputs" / "final_publish" / "FINAL_VIDEO.mp4"
 
 
 def _optional_r2_upload(local_file: Path, job_id: str) -> str | None:
@@ -427,7 +456,36 @@ def main() -> None:
         print("[WORKER] Redis not configured:", e, flush=True)
         raise SystemExit(2)
 
-    print("[WORKER] Online — queue", JOBS_PENDING, flush=True)
+    # Register this worker in the workers registry
+    try:
+        r.sadd(WORKERS_REGISTRY_KEY, WORKER_ID)
+        print(f"[WORKER] {WORKER_ID} registered in workers registry", flush=True)
+    except Exception:
+        pass
+
+    # Validate active avatars on startup
+    try:
+        loader = AvatarLoader()
+        report = loader.validate_all()
+        for av in report.get("valid", []):
+            print(f"[WORKER] avatar ready: {av['avatar_id']} ({av['status']})", flush=True)
+        for av in report.get("invalid", []):
+            print(f"[WORKER] avatar WARNING: {av['avatar_id']} — {av['error']}", flush=True)
+        if not report.get("valid"):
+            print("[WORKER] WARNING: NO_ACTIVE_AVATARS — jobs will be rejected until an avatar is active", flush=True)
+    except Exception as exc:
+        print(f"[WORKER] Avatar validation error: {exc}", flush=True)
+
+    print(f"[WORKER] {WORKER_ID} online — queue {JOBS_PENDING}", flush=True)
+
+    # Telegram: notify online + start command polling thread
+    try:
+        from infrastructure.telegram_notify import notify_worker_online, poll_telegram_commands
+        notify_worker_online(WORKER_ID)
+        poll_telegram_commands(r)
+    except Exception:
+        pass
+
     last_hb = 0.0
     _write_heartbeat(r, state="IDLE")
     while True:
@@ -462,14 +520,51 @@ def main() -> None:
             continue
 
         job_id = job.get("job_id")
+        retry = int(job.get("retry_count", 0))
+
+        # ── Passport intake (Phase 5) ───────────────────────────────────────
+        passport: ProductPassport | None = None
+        passport_id = (job.get("passport_id") or "").strip()
+        if passport_id:
+            passport = ProductPassport.load(r, passport_id)
+            if passport is None:
+                print(f"[WORKER] Passport not found: {passport_id} — sending to DLQ", flush=True)
+                r.rpush(DLQ, json.dumps(job))
+                continue
+            print(f"[WORKER] Passport {passport_id} loaded: title={passport.title[:60]!r}", flush=True)
+            # Hydrate job from passport
+            if not job_id:
+                import uuid as _uuid
+                job_id = f"job-{_uuid.uuid4()}"
+                job["job_id"] = job_id
+            if not job.get("avatar_id"):
+                job["avatar_id"] = passport.avatar_id
+        # ───────────────────────────────────────────────────────────────────
+
         product_url = (job.get("product_url") or "").strip()
         product_page_url = (job.get("product_page_url") or "").strip()
         _merge_studio_persona_into_job(job, r)
-        avatar_id = (job.get("avatar_id") or "theanikaglow").strip()
-        template_id = (job.get("template_id") or job.get("template") or "").strip()
-        retry = int(job.get("retry_count", 0))
 
-        if not job_id or not product_url:
+        # Resolve avatar: job > passport > AvatarLoader default
+        avatar_id = (job.get("avatar_id") or os.getenv("ACTIVE_AVATAR_ID") or "").strip()
+        if not avatar_id:
+            try:
+                avatar_id = AvatarLoader().pick_default() or ""
+            except Exception:
+                pass
+        if not avatar_id:
+            print("[WORKER] NO_ACTIVE_AVATARS — no avatar configured; sending to DLQ", flush=True)
+            r.rpush(DLQ, json.dumps(job))
+            continue
+
+        template_id = (job.get("template_id") or job.get("template") or "").strip()
+
+        # For passport jobs, product_url comes from passport; for legacy jobs require it
+        if passport:
+            if not product_url:
+                product_url = (passport.affiliate_url or passport.source_url or "").strip()
+                product_page_url = product_url
+        elif not job_id or not product_url:
             print("[WORKER] Missing job_id or product_url", flush=True)
             continue
 
@@ -497,6 +592,36 @@ def main() -> None:
             "UGC_PRODUCT_URL": product_page_url or product_url,
             "ACTIVE_AVATAR_ID": avatar_id,
         }
+
+        # ── Passport env injection ──────────────────────────────────────────
+        if passport:
+            # Write passport.json to workspace so pipeline can skip scrape stage
+            try:
+                pp_path = _write_passport_to_workspace(job_id, passport)
+                env_overrides["KLIP_PASSPORT_FILE"] = str(pp_path)
+            except Exception as exc:
+                print(f"[WORKER] Passport workspace write failed: {exc}", flush=True)
+            # Video format from passport
+            if passport.video_format:
+                env_overrides["KLIP_VIDEO_FORMAT"] = passport.video_format
+            # Product images from passport (3+ images)
+            if passport.images:
+                env_overrides["UGC_PRODUCT_IMAGE_URLS"] = ",".join(
+                    str(img).strip() for img in passport.images if str(img).strip()
+                )
+            # Product title
+            if passport.title:
+                env_overrides["UGC_PRODUCT_TITLE"] = passport.title
+            # Affiliate URL as the canonical product URL
+            if passport.affiliate_url:
+                env_overrides["UGC_PRODUCT_URL"] = passport.affiliate_url
+            print(
+                f"[WORKER] Passport {passport_id} loaded and valid — "
+                f"format={passport.video_format} avatar={avatar_id}",
+                flush=True,
+            )
+        # ───────────────────────────────────────────────────────────────────
+
         layout_mode = (job.get("layout_mode") or "").strip()
         if layout_mode:
             env_overrides["KLIP_LAYOUT_MODE"] = layout_mode
@@ -601,6 +726,11 @@ def main() -> None:
             r.rpush(DLQ, json.dumps(job))
             print(f"[WORKER] job_id={job_id} pipeline timeout — DLQ, status FAILED", flush=True)
             _write_heartbeat(r, state="ERROR", job_id=job_id, error="pipeline_timeout")
+            try:
+                from infrastructure.telegram_notify import notify_job_failed
+                notify_job_failed(job_id, "pipeline_timeout")
+            except Exception:
+                pass
             continue
 
         if code != 0:
@@ -613,10 +743,15 @@ def main() -> None:
                 r.rpush(DLQ, json.dumps(job))
                 update_manifest(job_id, status="DEAD_LETTER", log_tail=log_tail)
                 print(f"[WORKER] Failed rc={code}, moved to DLQ", flush=True)
+                try:
+                    from infrastructure.telegram_notify import notify_job_failed
+                    notify_job_failed(job_id, f"rc={code}")
+                except Exception:
+                    pass
             _write_heartbeat(r, state="ERROR", job_id=job_id, error=f"pipeline_rc={code}")
             continue
 
-        final_path = _final_video_path()
+        final_path = _final_video_path(job_id)
         if not final_path.is_file():
             job["retry_count"] = retry + 1
             if job["retry_count"] <= _MAX_RETRIES:
@@ -628,12 +763,15 @@ def main() -> None:
                 update_manifest(job_id, status="DEAD_LETTER", error="FINAL_VIDEO_MISSING", log_tail=log_tail)
             continue
 
+        # Pipeline writes directly to the job-isolated path when JOB_ID + JOBS_DIR are set.
+        # If it landed in the legacy shared path, copy it over now.
         per_job_video = _job_video_path(job_id)
-        per_job_video.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            per_job_video.write_bytes(final_path.read_bytes())
-        except Exception:
-            per_job_video = final_path
+        if final_path != per_job_video:
+            per_job_video.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                per_job_video.write_bytes(final_path.read_bytes())
+            except Exception:
+                per_job_video = final_path
 
         r2_url = _optional_r2_upload(per_job_video, job_id)
         update_manifest(
@@ -707,6 +845,11 @@ def main() -> None:
         except Exception:
             pass
         print("[WORKER] Done — pushed to HITL queue", job_id, flush=True)
+        try:
+            from infrastructure.telegram_notify import notify_job_complete
+            notify_job_complete(job_id, r2_url or "")
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
@@ -716,4 +859,39 @@ if __name__ == "__main__":
         load_dotenv(_REPO / ".env", override=False)
     except ImportError:
         pass
-    main()
+
+    # Minimal HTTP health server so Railway's /health check passes.
+    _health_port = int(os.environ.get("PORT", "8000"))
+
+    def _start_health_server() -> None:
+        import http.server
+        import socketserver
+
+        class _HealthHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"status":"ok","service":"klip-avatar-worker"}')
+
+            def log_message(self, *_):  # silence access logs
+                pass
+
+        with socketserver.TCPServer(("", _health_port), _HealthHandler) as srv:
+            srv.serve_forever()
+
+    threading.Thread(target=_start_health_server, daemon=True, name="health-srv").start()
+    print(f"[WORKER] Health server listening on port {_health_port}", flush=True)
+
+    try:
+        main()
+    finally:
+        # Clean shutdown: remove from worker registry
+        try:
+            from infrastructure.redis_client import get_redis_client_optional
+            _r = get_redis_client_optional()
+            if _r is not None:
+                _r.srem(WORKERS_REGISTRY_KEY, WORKER_ID)
+                print(f"[WORKER] {WORKER_ID} removed from workers registry", flush=True)
+        except Exception:
+            pass

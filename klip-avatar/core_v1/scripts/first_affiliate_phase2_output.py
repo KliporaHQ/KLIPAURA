@@ -16,7 +16,7 @@ Optional:
   AFFILIATE_CTA_OVERLAY — final drawtext line (default in video-render: Get yours • Link in bio)
   CINEMATIC_BG_MUSIC_PATH — local MP3/WAV for ducking under voice
   AFFILIATE_BGM_URL — HTTP(S) to download BGM when CINEMATIC_BG_MUSIC_PATH unset
-  ACTIVE_AVATAR_ID — required; must not be "default" (e.g. theanikaglow)
+  ACTIVE_AVATAR_ID — required; must not be "default" (set to a real avatar_id from data/avatars/)
   AFFILIATE_PRODUCT_USE_I2V — default 0; only exact value 1 enables WaveSpeed product I2V (experimental)
   AFFILIATE_TOP_KB_RATE / AFFILIATE_TOP_KB_CAP — product motion in compose + KB fallback (defaults 0.00075 / 1.04)
 
@@ -589,8 +589,8 @@ def main() -> int:
     avatar_raw = (os.environ.get("ACTIVE_AVATAR_ID") or "").strip()
     if not avatar_raw or avatar_raw.lower() == "default":
         print(
-            "ERROR: ACTIVE_AVATAR_ID must be set to a real avatar folder in core_v1/.env "
-            '(e.g. ACTIVE_AVATAR_ID=theanikaglow). Literal "default" is not allowed.',
+            "ERROR: ACTIVE_AVATAR_ID must be set to a real avatar folder (e.g. set in root .env). "
+            'Literal "default" is not allowed.',
             flush=True,
         )
         return 8

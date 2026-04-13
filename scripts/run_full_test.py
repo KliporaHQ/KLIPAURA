@@ -188,7 +188,7 @@ def main() -> int:
             "--product-url",
             "https://amzn.to/4cewwZo",
             "--avatar-id",
-            "theanikaglow",
+            os.environ.get("ACTIVE_AVATAR_ID", ""),
             "--generate-funnel",
             "--progress-sec",
             str(args.progress_sec),

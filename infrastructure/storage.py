@@ -19,8 +19,20 @@ except ImportError:
     Config = None  # type: ignore
     ClientError = Exception  # type: ignore
 
-DEFAULT_R2_ENDPOINT = "https://3aed9aa011042cdc62ee367ec4a2f8e4.r2.cloudflarestorage.com"
-DEFAULT_R2_BUCKET = "klipaura-master-2-0"
+DEFAULT_R2_ENDPOINT = ""   # Must be set via R2_ENDPOINT env var
+DEFAULT_R2_BUCKET = ""     # Must be set via R2_BUCKET env var
+
+
+def _r2_env(canonical: str, *aliases: str) -> str:
+    """Return first non-empty value from canonical name, then aliases, then ''."""
+    v = os.environ.get(canonical, "").strip()
+    if v:
+        return v
+    for alias in aliases:
+        v = os.environ.get(alias, "").strip()
+        if v:
+            return v
+    return ""
 
 
 class S3AssetStore:
@@ -133,13 +145,14 @@ def create_r2_store(
     prefix: str = "assets",
     public_base_url: Optional[str] = None,
 ) -> S3AssetStore:
-    bucket = bucket or os.environ.get("R2_BUCKET_NAME") or DEFAULT_R2_BUCKET
-    endpoint = endpoint_url or os.environ.get("R2_ENDPOINT_URL") or DEFAULT_R2_ENDPOINT
+    # Canonical names take priority; alias names are fallbacks for backward compatibility.
+    bucket = bucket or _r2_env("R2_BUCKET", "R2_BUCKET_NAME") or DEFAULT_R2_BUCKET
+    endpoint = endpoint_url or _r2_env("R2_ENDPOINT", "R2_ENDPOINT_URL") or DEFAULT_R2_ENDPOINT
     if "?" in endpoint:
         endpoint = endpoint.split("?")[0]
-    access = os.environ.get("R2_ACCESS_KEY") or os.environ.get("AWS_ACCESS_KEY_ID")
-    secret = os.environ.get("R2_SECRET_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY")
-    public_url = public_base_url or os.environ.get("R2_PUBLIC_BASE_URL", "").strip()
+    access = _r2_env("R2_ACCESS_KEY", "AWS_ACCESS_KEY_ID")
+    secret = _r2_env("R2_SECRET_ACCESS_KEY", "R2_SECRET_KEY", "AWS_SECRET_ACCESS_KEY")
+    public_url = public_base_url or _r2_env("R2_PUBLIC_URL", "R2_PUBLIC_BASE_URL")
     return S3AssetStore(
         bucket=bucket,
         endpoint_url=endpoint,
@@ -153,9 +166,9 @@ def create_r2_store(
 
 def r2_configured() -> bool:
     """True when minimal R2 credentials are present (bucket + endpoint + keys)."""
-    bucket = (os.environ.get("R2_BUCKET_NAME") or "").strip()
-    access = (os.environ.get("R2_ACCESS_KEY") or os.environ.get("AWS_ACCESS_KEY_ID") or "").strip()
-    secret = (os.environ.get("R2_SECRET_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY") or "").strip()
+    bucket = _r2_env("R2_BUCKET", "R2_BUCKET_NAME")
+    access = _r2_env("R2_ACCESS_KEY", "AWS_ACCESS_KEY_ID")
+    secret = _r2_env("R2_SECRET_ACCESS_KEY", "R2_SECRET_KEY", "AWS_SECRET_ACCESS_KEY")
     return bool(bucket and access and secret)
 
 

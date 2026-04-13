@@ -275,10 +275,50 @@ def _apply_affiliate_env_from_job() -> None:
 
 
 def main() -> int:
+    import argparse
+
+    # CLI args take strict precedence over .env / environment.
+    # Set env vars before any other reads so the rest of the pipeline picks them up transparently.
+    parser = argparse.ArgumentParser(description="UGC pipeline: product URL → FINAL_VIDEO.mp4")
+    parser.add_argument("--product-url", dest="product_url", help="Product page URL (overrides UGC_PRODUCT_URL)")
+    parser.add_argument("--avatar-id", dest="avatar_id", help="Avatar folder ID (overrides ACTIVE_AVATAR_ID)")
+    parser.add_argument("--voice-id", dest="voice_id", help="ElevenLabs voice ID (overrides ELEVENLABS_VOICE_ID)")
+    parser.add_argument("--job-id", dest="job_id", help="Job ID for manifest tracking (overrides JOB_ID)")
+    parser.add_argument("--jobs-dir", dest="jobs_dir", help="Jobs directory (overrides JOBS_DIR)")
+    parser.add_argument("--cta", dest="cta", help="CTA overlay text (overrides AFFILIATE_CTA_OVERLAY)")
+    parser.add_argument("--passport-file", dest="passport_file",
+                        help="Path to passport.json — skips product scrape stage when provided")
+    parser.add_argument("--video-format", dest="video_format",
+                        help="VideoFormat class name (e.g. SplitFormat, LipsyncFormat). Overrides KLIP_VIDEO_FORMAT")
+    args, _ = parser.parse_known_args()
+    if args.product_url:
+        os.environ["UGC_PRODUCT_URL"] = args.product_url
+    if args.avatar_id:
+        os.environ["ACTIVE_AVATAR_ID"] = args.avatar_id
+    if args.voice_id:
+        os.environ["ELEVENLABS_VOICE_ID"] = args.voice_id
+    if args.job_id:
+        os.environ["JOB_ID"] = args.job_id
+    if args.jobs_dir:
+        os.environ["JOBS_DIR"] = args.jobs_dir
+    if args.cta:
+        os.environ["AFFILIATE_CTA_OVERLAY"] = args.cta
+    if args.passport_file:
+        os.environ["KLIP_PASSPORT_FILE"] = args.passport_file
+    if args.video_format:
+        os.environ["KLIP_VIDEO_FORMAT"] = args.video_format
+
     ffmpeg_exe = _ffmpeg()
     ffprobe_exe = _ffprobe()
 
     _apply_affiliate_env_from_job()
+
+    # Log passport file and video format selection
+    _passport_file = (os.environ.get("KLIP_PASSPORT_FILE") or "").strip()
+    _video_format = (os.environ.get("KLIP_VIDEO_FORMAT") or "SplitFormat").strip()
+    if _passport_file:
+        print(f"[pipeline] passport_file={_passport_file}", flush=True)
+    print(f"[format] video_format={_video_format}", flush=True)
 
     # Split ratio: read only from AFFILIATE_SPLIT_TOP_RATIO (default 0.30 in video-render engine / .env).
     os.environ.setdefault("AFFILIATE_SPLIT_SKIP_DRAWTEXT_CTA", "1")
@@ -298,7 +338,7 @@ def main() -> int:
     os.environ["AFFILIATE_PRODUCT_USE_I2V"] = "1"
     os.environ.setdefault(
         "AFFILIATE_CTA_OVERLAY",
-        "Get yours - Link in bio | anikaglow-20",
+        os.environ.get("AFFILIATE_CTA_DEFAULT", "Get yours - Link in bio"),
     )
 
     if (os.environ.get("UGC_LOG_SHIP_GATE") or "").strip().lower() in ("1", "true", "yes", "on"):
@@ -735,7 +775,7 @@ def main() -> int:
         scenes_cap: list[dict[str, Any]] = [
             {"type": "hook", "text": parts[0], "keywords": ["hook"]},
             {"type": "body", "text": parts[min(1, len(parts) - 1)], "keywords": ["product"]},
-            {"type": "cta", "text": parts[-1], "keywords": ["link", "bio", "anikaglow"]},
+            {"type": "cta", "text": parts[-1], "keywords": ["link", "bio"]},
         ]
         scenes_cap = [enrich_scene(s) for s in scenes_cap]
         caps = generate_captions(scenes_cap)
@@ -788,14 +828,21 @@ def main() -> int:
             requires_manual_review=compliance_result.get("requires_manual_review", False)
         )
 
-        publish_dir = os.path.join(_CORE, "outputs", "final_publish")
+        # Write FINAL_VIDEO.mp4 to the job-isolated path when running under the worker
+        # (JOB_ID + JOBS_DIR both set).  Falls back to the legacy shared path for manual runs.
+        _jid_out = (os.environ.get("JOB_ID") or "").strip()
+        _jobs_dir_out = (os.environ.get("JOBS_DIR") or "").strip()
+        if _jid_out and _jobs_dir_out:
+            publish_dir = os.path.join(_jobs_dir_out, _jid_out)
+        else:
+            publish_dir = os.path.join(_CORE, "outputs", "final_publish")
         os.makedirs(publish_dir, exist_ok=True)
         locked_path = os.path.join(publish_dir, "FINAL_VIDEO.mp4")
         shutil.copy2(out_final, locked_path)
 
         print("FINAL VIDEO LOCKED", flush=True)
         print("READY FOR MANUAL PUBLISH", flush=True)
-        touch_pipeline_manifest("completed", "ugc_pipeline finished; FINAL_VIDEO locked under core_v1/outputs/final_publish")
+        touch_pipeline_manifest("completed", f"ugc_pipeline finished; FINAL_VIDEO at {locked_path}")
         return 0
     except RuntimeError as e:
         fail_pipeline_manifest(e)

@@ -4,7 +4,7 @@ One-command automated full stack: start HITL (if needed), start worker, POST job
 
 - HITL: uvicorn hitl_server:app --app-dir klip-dispatch on http://127.0.0.1:8080 if /openapi.json not OK.
 - Worker: klip-avatar/worker.py unless --skip-start-worker.
-- POST: Roborock short URL, theanikaglow, generate_funnel, affiliate_split_55_45.
+- POST: Roborock short URL, active avatar from registry, generate_funnel, affiliate_split_55_45.
 - Poll until status in HITL_PENDING | COMPLETED | FAILED | DEAD_LETTER (default timeout 600s; full renders often need --timeout-sec 3600).
 - PYTHONPATH: <repo>;<repo>/klip-scanner;<repo>/klip-funnel (via os.pathsep).
 - On exit, timeout, or success: terminates only Popen processes this script started (unless --keep-services).
@@ -129,7 +129,7 @@ def main() -> int:
     ap.add_argument("--poll-sec", type=float, default=2.0, help="Sleep between manifest reads")
     ap.add_argument("--progress-sec", type=float, default=15.0, help="Print progress every N seconds")
     ap.add_argument("--product-url", default="https://amzn.to/4cewwZo")
-    ap.add_argument("--avatar-id", default="theanikaglow")
+    ap.add_argument("--avatar-id", default=os.environ.get("ACTIVE_AVATAR_ID", ""))
     ap.add_argument("--affiliate-program-id", default="example_program")
     args = ap.parse_args()
 

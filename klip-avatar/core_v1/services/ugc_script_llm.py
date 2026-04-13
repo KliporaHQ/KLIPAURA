@@ -9,7 +9,7 @@ import os
 import re
 import typing as t
 
-_DEFAULT_CTA_REQUIRED = "Get yours - Link in bio | anikaglow-20"
+_DEFAULT_CTA_REQUIRED = os.environ.get("AFFILIATE_CTA_DEFAULT") or "Get yours - link in bio"
 
 
 def _cta_required() -> str:

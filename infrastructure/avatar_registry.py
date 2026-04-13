@@ -1,4 +1,8 @@
-"""Load ``config/avatars.json`` — display names and default ElevenLabs voice hints per ``avatar_id``."""
+"""Load ``config/avatars.json`` — display names and default ElevenLabs voice hints per ``avatar_id``.
+
+Deprecated: use infrastructure.avatar_loader.AvatarLoader for new code.
+These functions are kept for backward compatibility only.
+"""
 
 from __future__ import annotations
 
@@ -29,9 +33,9 @@ def load_avatars_config() -> dict[str, Any]:
 
 
 def default_avatar_id() -> str:
+    """Return default avatar from config. Empty string if not configured — callers must handle."""
     data = load_avatars_config()
-    d = str(data.get("default_avatar_id") or "").strip()
-    return d or "theanikaglow"
+    return str(data.get("default_avatar_id") or "").strip()
 
 
 def get_registry_entry(avatar_id: str) -> dict[str, Any]:

@@ -31,7 +31,7 @@ def main() -> int:
         default="https://example.com/product/sample-item-123",
         help="Sample product page URL (HTTPS)",
     )
-    p.add_argument("--avatar-id", default="theanikaglow", help="Must exist under core_v1/data/avatars/ for full pipeline")
+    p.add_argument("--avatar-id", default="", help="Avatar ID; must exist under core_v1/data/avatars/ for full pipeline. Defaults to first active avatar.")
     p.add_argument(
         "--generate-funnel",
         action="store_true",

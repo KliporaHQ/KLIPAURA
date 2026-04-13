@@ -191,7 +191,7 @@ def _affiliate_cta_filter_segment(in_label: str, out_label: str, duration_sec: f
     "Get yours • Link in bio"); merchant belongs in narration/description, not here.
     Disabled when overlay is empty or AFFILIATE_CTA_DISABLE is truthy.
     """
-    line = (os.environ.get("AFFILIATE_CTA_OVERLAY") or "Get yours - Link in bio | anikaglow-20").strip()
+    line = (os.environ.get("AFFILIATE_CTA_OVERLAY") or os.environ.get("AFFILIATE_CTA_DEFAULT") or "Get yours - link in bio").strip()
     if not line:
         return ""
     dis = (os.environ.get("AFFILIATE_CTA_DISABLE") or "").strip().lower()

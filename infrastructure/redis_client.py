@@ -204,6 +204,10 @@ class UpstashRedis:
         result = self.command("SADD", self._key(key), *members)
         return int(result or 0)
 
+    def srem(self, key: str, *members: str) -> int:
+        result = self.command("SREM", self._key(key), *members)
+        return int(result or 0)
+
     def sismember(self, key: str, member: str) -> bool:
         result = self.command("SISMEMBER", self._key(key), member)
         return bool(result)
@@ -339,6 +343,9 @@ class LocalRedis:
 
     def sadd(self, key: str, *members: str) -> int:
         return int(self._client.sadd(self._key(key), *members) or 0)
+
+    def srem(self, key: str, *members: str) -> int:
+        return int(self._client.srem(self._key(key), *members) or 0)
 
     def sismember(self, key: str, member: str) -> bool:
         return bool(self._client.sismember(self._key(key), member))

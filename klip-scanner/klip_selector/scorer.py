@@ -12,7 +12,7 @@ _REPO = Path(__file__).resolve().parents[1]
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-_SENTIMENT_KEY = "klip:market:sentiment"
+_SENTIMENT_KEY = "klipaura:market:sentiment"
 
 
 def _sentiment_boost() -> float:

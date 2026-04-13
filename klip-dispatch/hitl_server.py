@@ -64,10 +64,12 @@ from infrastructure.queue_names import (
     JOBS_PAUSED,
     JOBS_PENDING,
     QUEUE_GLOBAL_PAUSED_KEY,
+    WORKER_AVATAR_HEARTBEAT_KEY,
 )
 from infrastructure.redis_client import RedisConfigError, get_redis_client, get_redis_client_optional
 from infrastructure.affiliate_programs import resolve_affiliate_data_for_job
 from infrastructure.avatar_registry import load_avatars_config
+from infrastructure.avatar_loader import AvatarLoader
 
 from klip_scanner.csv_scanner import ingest_products_csv
 from klip_scanner.discovery_agent import run_discovery_cycle
@@ -119,7 +121,7 @@ def _redis():
 
 class JobCreateBody(BaseModel):
     product_url: str = Field(..., min_length=8)
-    avatar_id: str = Field(default="theanikaglow")
+    avatar_id: str | None = None
     template_id: str | None = None
     product_page_url: str | None = None
     product_image_urls: list[str] | str | None = None
@@ -757,7 +759,7 @@ def ops_summary() -> dict:
         except Exception:
             out["queue_global_paused"] = False
         try:
-            raw_hb = r.get("klip:worker:heartbeat")
+            raw_hb = r.get(WORKER_AVATAR_HEARTBEAT_KEY)
             hb = json.loads(raw_hb) if raw_hb else None
             out["worker"] = hb if isinstance(hb, dict) else {"ok": False}
         except Exception:
@@ -1205,7 +1207,7 @@ def post_job(body: JobCreateBody) -> dict:
     template_id = _safe_template_id(str(body.template_id or ""))
     payload: dict = {
         "product_url": url,
-        "avatar_id": (body.avatar_id or "theanikaglow").strip(),
+        "avatar_id": (body.avatar_id or "").strip(),
         "retry_count": 0,
     }
     if template_id:
@@ -1369,7 +1371,7 @@ def list_avatars() -> dict:
             }
         )
     return {
-        "default_avatar_id": str(cfg.get("default_avatar_id") or "").strip() or "theanikaglow",
+        "default_avatar_id": str(cfg.get("default_avatar_id") or "").strip() or "",
         "avatars": out,
     }
 
@@ -1720,7 +1722,7 @@ def approve(job_id: str) -> dict:
     except Exception:
         raise HTTPException(404, "job not found")
     payload = m.get("payload") or {}
-    avatar_id = (payload.get("avatar_id") or "theanikaglow").strip()
+    avatar_id = (payload.get("avatar_id") or "").strip()
     product_url = (payload.get("product_url") or "").strip()
     r2 = (m.get("r2_url") or "").strip()
     final_path = (m.get("final_video_path") or "").strip()
@@ -1775,7 +1777,7 @@ def regenerate(job_id: str) -> dict:
         raise HTTPException(404, "job not found")
     p = m.get("payload") or {}
     product_url = (p.get("product_url") or "").strip()
-    avatar_id = (p.get("avatar_id") or "theanikaglow").strip()
+    avatar_id = (p.get("avatar_id") or "").strip()
     if not product_url:
         raise HTTPException(400, "no product_url in manifest")
     r = _redis()
@@ -1901,7 +1903,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
       <label class="mc-label" for="product-url">Product URL</label>
       <input class="mc-in" id="product-url" type="url" placeholder="https://www.amazon.com/dp/..." autocomplete="off"/>
       <label class="mc-label" for="avatar-id">Avatar ID</label>
-      <input class="mc-in" id="avatar-id" type="text" value="theanikaglow" placeholder="theanikaglow"/>
+      <input class="mc-in" id="avatar-id" type="text" value="" placeholder="avatar-id (leave blank for default)"/>
       <div class="row" style="margin-top:14px;">
         <button type="button" class="primary" onclick="enqueueJob()">Enqueue job</button>
       </div>
@@ -2094,7 +2096,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     }
     async function enqueueJob() {
       const url = document.getElementById('product-url').value.trim();
-      const avatar = (document.getElementById('avatar-id').value || 'theanikaglow').trim();
+      const avatar = (document.getElementById('avatar-id').value || '').trim();
       const err = document.getElementById('enqueue-err');
       const ok = document.getElementById('enqueue-ok');
       err.textContent = '';
@@ -2261,7 +2263,7 @@ def get_waitlist_leads(request: Request) -> dict:
 def dashboard(request: Request) -> str:
     """Password-protected admin dashboard."""
     _require_admin(request)
-    
+
     try:
         p = _STATIC_DIR / "index.html"
         if p.is_file():
@@ -2269,3 +2271,82 @@ def dashboard(request: Request) -> str:
     except Exception:
         pass
     return _DASHBOARD_HTML
+
+
+# ── /api/v1/avatars — AvatarLoader-backed management API ─────────────────────
+
+@app.get("/api/v1/avatars")
+def v1_list_avatars(request: Request) -> JSONResponse:
+    """List all avatars from registry (any status). No auth required."""
+    loader = AvatarLoader()
+    return JSONResponse({"avatars": loader.list_all()})
+
+
+@app.get("/api/v1/avatars/{avatar_id}")
+def v1_get_avatar(avatar_id: str, request: Request) -> JSONResponse:
+    """Return full social_config for avatar. Requires ADMIN_API_KEY."""
+    _require_admin(request)
+    aid = _safe_avatar_id(avatar_id)
+    if not aid:
+        raise HTTPException(400, "invalid avatar_id")
+    loader = AvatarLoader()
+    try:
+        cfg = loader.load(aid)
+    except KeyError:
+        raise HTTPException(404, f"Avatar '{aid}' not found or missing social_config.json")
+    # Redact secrets before returning
+    safe, _ = _redact_social_config(cfg)
+    return JSONResponse({"avatar_id": aid, "social_config": safe})
+
+
+@app.post("/api/v1/avatars/{avatar_id}/pause")
+def v1_pause_avatar(avatar_id: str, request: Request) -> JSONResponse:
+    """Set avatar status=paused. Requires ADMIN_API_KEY."""
+    _require_admin(request)
+    aid = _safe_avatar_id(avatar_id)
+    if not aid:
+        raise HTTPException(400, "invalid avatar_id")
+    loader = AvatarLoader()
+    if not loader.update_status(aid, "paused"):
+        raise HTTPException(404, f"Avatar '{aid}' not found in registry")
+    return JSONResponse({"ok": True, "avatar_id": aid, "status": "paused"})
+
+
+@app.post("/api/v1/avatars/{avatar_id}/resume")
+def v1_resume_avatar(avatar_id: str, request: Request) -> JSONResponse:
+    """Set avatar status=active. Requires ADMIN_API_KEY."""
+    _require_admin(request)
+    aid = _safe_avatar_id(avatar_id)
+    if not aid:
+        raise HTTPException(400, "invalid avatar_id")
+    loader = AvatarLoader()
+    if not loader.update_status(aid, "active"):
+        raise HTTPException(404, f"Avatar '{aid}' not found in registry")
+    return JSONResponse({"ok": True, "avatar_id": aid, "status": "active"})
+
+
+@app.post("/api/v1/avatars/{avatar_id}/suspend")
+def v1_suspend_avatar(avatar_id: str, request: Request) -> JSONResponse:
+    """Set avatar status=suspended. Requires ADMIN_API_KEY."""
+    _require_admin(request)
+    aid = _safe_avatar_id(avatar_id)
+    if not aid:
+        raise HTTPException(400, "invalid avatar_id")
+    loader = AvatarLoader()
+    if not loader.update_status(aid, "suspended"):
+        raise HTTPException(404, f"Avatar '{aid}' not found in registry")
+    return JSONResponse({"ok": True, "avatar_id": aid, "status": "suspended"})
+
+
+@app.delete("/api/v1/avatars/{avatar_id}")
+def v1_delete_avatar(avatar_id: str, request: Request) -> JSONResponse:
+    """Soft-delete: set avatar status=suspended (never hard-deletes files). Requires ADMIN_API_KEY."""
+    _require_admin(request)
+    aid = _safe_avatar_id(avatar_id)
+    if not aid:
+        raise HTTPException(400, "invalid avatar_id")
+    loader = AvatarLoader()
+    if not loader.update_status(aid, "suspended"):
+        raise HTTPException(404, f"Avatar '{aid}' not found in registry")
+    return JSONResponse({"ok": True, "avatar_id": aid, "status": "suspended",
+                         "note": "Avatar suspended (files preserved on disk)"})

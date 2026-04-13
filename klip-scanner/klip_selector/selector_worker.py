@@ -5,7 +5,7 @@ Load products.csv → UAE filter → score → Redis blacklist check → RPUSH t
 Run from repo root:
   python -m klip_selector.selector_worker
 
-Env: PRODUCTS_CSV, SELECTOR_LIMIT (default 5), SELECTOR_AVATAR_ID (default theanikaglow), Redis same as worker.
+Env: PRODUCTS_CSV, SELECTOR_LIMIT (default 5), SELECTOR_AVATAR_ID (uses first active avatar if unset), Redis same as worker.
 """
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ def is_blacklisted(r, url: str) -> bool:
 
 def run_cycle(limit: int | None = None, avatar_id: str | None = None) -> int:
     lim = limit if limit is not None else int(os.getenv("SELECTOR_LIMIT", "5"))
-    av = (avatar_id or os.getenv("SELECTOR_AVATAR_ID") or "theanikaglow").strip()
+    av = (avatar_id or os.getenv("SELECTOR_AVATAR_ID") or "").strip()
 
     try:
         redis = get_redis_client()

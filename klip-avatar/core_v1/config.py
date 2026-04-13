@@ -1,10 +1,12 @@
 import os
 from pathlib import Path
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 from typing import Dict, Any
 
 _BASE = Path(__file__).resolve().parent
-load_dotenv(_BASE / ".env", encoding="utf-8-sig", override=False)
+# Load from repo root .env (find_dotenv walks up from cwd).
+# override=False: OS env (set by worker subprocess) always wins over .env.
+load_dotenv(find_dotenv(usecwd=False), encoding="utf-8-sig", override=False)
 
 
 def validate_required_environment() -> None:
@@ -30,10 +32,11 @@ class Config:
     USE_GETLATE = os.getenv("USE_GETLATE", "false").lower() in ("true", "1", "yes")
     USE_AVATAR_CONFIG = os.getenv("USE_AVATAR_CONFIG", "true").lower() in ("true", "1", "yes")
 
-    ACTIVE_AVATAR_ID = os.getenv("ACTIVE_AVATAR_ID") or os.getenv("AVATAR_ID") or "default"
+    # Avatar resolved at runtime from AvatarLoader — no hardcoded fallback.
+    ACTIVE_AVATAR_ID = (os.getenv("ACTIVE_AVATAR_ID") or os.getenv("AVATAR_ID") or "").strip()
 
     BASE_DIR = _BASE
-    AVATARS_DIR = _BASE / "data" / "avatars" / ACTIVE_AVATAR_ID
+    AVATARS_DIR = _BASE / "data" / "avatars" / (ACTIVE_AVATAR_ID or "default")
     OUTPUT_DIR = _resolve_output_dir()
 
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -46,7 +49,7 @@ class Config:
         default_persona = {
             "name": "Default Avatar",
             "tone": "professional",
-            "voice_id": "21m00Tcm4TlvDq8ikWAM",
+            "voice_id": "",  # set in social_config.json, not here
             "style": "review",
             "affiliate_links": {}
         }

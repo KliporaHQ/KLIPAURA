@@ -1,11 +1,6 @@
 {
-  "_comment": "Avatar registry for per-job selection (avatar_id matches core_v1/data/avatars/<id>/).",
-  "default_avatar_id": "theanikaglow",
-  "avatars": {
-    "theanikaglow": {
-      "display_name": "Default persona",
-      "elevenlabs_voice_id": "",
-      "notes": "Override voice in persona.json / social_config.json under data/avatars if preferred."
-    }
-  }
+  "_comment": "DEPRECATED — use data/avatars/registry.json and AvatarLoader for new code. This file is only consulted by the legacy avatar_registry.py compatibility shim.",
+  "_migration": "Per-avatar voice IDs and affiliate tags now live in klip-avatar/core_v1/data/avatars/<id>/social_config.json",
+  "default_avatar_id": "",
+  "avatars": {}
 }
