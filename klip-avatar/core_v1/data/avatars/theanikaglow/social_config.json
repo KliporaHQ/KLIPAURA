@@ -1,0 +1,40 @@
+{
+  "avatar_id": "theanikaglow",
+  "status": "active",
+  "agent_role": "influencer",
+  "display_name": "Anika Glow",
+  "handle": "@TheAnikaGlow",
+  "niches": ["beauty", "skincare", "wellness", "home", "kitchen"],
+  "description": "Warm, aspirational South Asian beauty influencer based in Dubai. Relatable yet luxurious. Full-screen 9:16 Ken Burns slideshow with narrated affiliate reviews.",
+  "signature_phrase": "Glow up with me — here's what actually works.",
+
+  "elevenlabs_voice_id": "OqpE8hL5qbTqEEH8G9vd",
+  "video_style": "ken_burns",
+  "render_layout": "ken_burns_slideshow_9x16",
+  "content_type": "affiliate_review",
+  "script_style": "affiliate_review",
+  "platforms": ["tiktok", "instagram", "youtube"],
+
+  "affiliate_ids": {
+    "amazon": "",
+    "temu": "",
+    "clickbank": ""
+  },
+
+  "getlate_api_key": "",
+  "getlate_base_url": "https://zernio.com/api",
+  "tiktok_account_id": "",
+
+  "posting_schedule": {
+    "timezone": "Asia/Dubai",
+    "posts_per_day": 1,
+    "preferred_times": ["08:00", "18:00"]
+  },
+
+  "assets": {
+    "face_image": "face.png",
+    "portrait_image": "portrait.png",
+    "watermark": "",
+    "background_music": ""
+  }
+}

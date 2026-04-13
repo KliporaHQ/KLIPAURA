@@ -1,0 +1,42 @@
+{
+  "avatar_id": "anikalow",
+  "status": "paused",
+  "agent_role": "influencer",
+  "display_name": "Anika Low",
+  "handle": "@AnikaLow",
+  "niches": ["beauty", "skincare", "budget"],
+  "description": "Relatable South Asian beauty creator sharing honest reviews of budget-friendly and affordable finds. Down-to-earth, approachable tone. Full-screen 9:16 vertical video.",
+  "signature_phrase": "Great finds don't have to break the bank.",
+
+  "elevenlabs_voice_id": "",
+  "video_style": "ken_burns",
+  "render_layout": "ken_burns_slideshow_9x16",
+  "content_type": "affiliate_review",
+  "script_style": "affiliate_review",
+  "platforms": ["tiktok", "instagram"],
+
+  "affiliate_ids": {
+    "amazon": "",
+    "temu": "",
+    "clickbank": ""
+  },
+
+  "getlate_api_key": "",
+  "getlate_base_url": "https://zernio.com/api",
+  "tiktok_account_id": "",
+
+  "posting_schedule": {
+    "timezone": "Asia/Dubai",
+    "posts_per_day": 1,
+    "preferred_times": ["10:00"]
+  },
+
+  "assets": {
+    "face_image": "",
+    "portrait_image": "",
+    "watermark": "",
+    "background_music": ""
+  },
+
+  "_note": "Paused — activate when theanikaglow hits $1K P&L threshold."
+}
