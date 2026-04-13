@@ -1051,9 +1051,10 @@
                 </div>
                 <div class="flex flex-wrap gap-2">
                   <button class="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950" onclick="saveAvatarFromModal()">Save</button>
-                  <button class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="generateFaceFromModal()">Generate face</button>
-                  <button class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="generatePortraitFromModal()">Generate portrait</button>
+                  <button id="av_btn_face" class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="generateFaceFromModal()">Generate face</button>
+                  <button id="av_btn_portrait" class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="generatePortraitFromModal()">Generate portrait</button>
                 </div>
+                <div id="av_status" class="hidden mt-1 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs"></div>
               </div>
             </div>
           </div>
@@ -1145,8 +1146,11 @@
             <div class="flex flex-wrap gap-2">
               <button class="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950" onclick="saveAvatarEdits()">Save</button>
               <button class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="syncAvatarToR2()">Sync to R2</button>
+              <button id="ed_btn_face" class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="generateFaceFromEditor()">Generate face</button>
+              <button id="ed_btn_portrait" class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm" onclick="generatePortraitFromEditor()">Generate portrait</button>
               <button class="rounded-xl border border-rose-900/60 bg-rose-950/30 px-4 py-2 text-sm text-rose-100" onclick="deleteAvatar()">Delete</button>
             </div>
+            <div id="ed_gen_status" class="hidden rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs text-slate-300"></div>
           </div>
         `;
       } catch (e) {
@@ -1270,29 +1274,148 @@
       }
     }
 
+    function modalStatus(msg, kind) {
+      const el = qs('#av_status');
+      if (!el) return;
+      const colors = { ok: 'text-emerald-400', error: 'text-rose-400', info: 'text-slate-300' };
+      el.className = 'mt-1 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs ' + (colors[kind] || colors.info);
+      el.textContent = msg;
+    }
+
+    async function _saveAvatarSilent() {
+      // Save avatar without closing the modal — used internally before generate
+      const avatar_id = qs('#av_id').value.trim();
+      if (!avatar_id) throw new Error('Fill in Avatar ID first');
+      let social = null;
+      const socialRaw = qs('#av_social').value.trim();
+      if (socialRaw) social = JSON.parse(socialRaw);
+      const sc = Object.assign({}, (social && typeof social === 'object') ? social : {});
+      const voice = qs('#av_voice').value.trim();
+      const getlateKey = qs('#av_getlate_key').value.trim();
+      const getlateBase = qs('#av_getlate_base').value.trim();
+      const tiktok = qs('#av_tiktok').value.trim();
+      const amz = qs('#av_amz').value.trim();
+      if (voice) sc.elevenlabs_voice_id = voice;
+      if (getlateKey) sc.getlate_api_key = getlateKey;
+      if (getlateBase) sc.getlate_base_url = getlateBase;
+      if (tiktok) sc.tiktok_account_id = tiktok;
+      if (amz) sc.amazon_associates_tag = amz;
+      const portraitB64 = await fileToB64(qs('#av_portrait').files[0]);
+      const faceB64 = await fileToB64(qs('#av_face').files[0]);
+      const persona = {
+        avatar_id,
+        name: qs('#av_name').value.trim() || avatar_id,
+        niche: qs('#av_niche').value.trim(),
+        description: qs('#av_desc').value.trim(),
+      };
+      const cta = qs('#av_cta').value.trim();
+      const sys = qs('#av_sys').value.trim();
+      if (cta) persona.cta_line = cta;
+      if (sys) persona.ugc_script_system_override = sys;
+      const body = { avatar_id, persona };
+      if (Object.keys(sc).length) body.social_config = sc;
+      if (portraitB64) body.portrait_png_b64 = portraitB64;
+      if (faceB64) body.face_png_b64 = faceB64;
+      // Try POST (create); if 409/already exists, that's fine — avatar exists, proceed
+      try {
+        await api('/api/avatars', { method: 'POST', body: JSON.stringify(body), admin: true });
+      } catch (e) {
+        // If the avatar already exists (409 or "already exists"), swallow and continue
+        if (!((e.status === 409) || (e.message && e.message.toLowerCase().includes('already exists')) || (e.message && e.message.toLowerCase().includes('conflict')))) {
+          throw e;
+        }
+      }
+    }
+
     async function generateFaceFromModal() {
+      const btn = qs('#av_btn_face');
       try {
         const avatar_id = qs('#av_id').value.trim();
         const description = qs('#av_desc').value.trim();
-        if (!avatar_id) throw new Error('avatar_id required');
-        if (!description) throw new Error('description required');
+        if (!avatar_id) throw new Error('Fill in Avatar ID first');
+        if (!description) throw new Error('Fill in Description first (used for image generation)');
+        if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+        modalStatus('Saving avatar…', 'info');
+        await _saveAvatarSilent();
+        if (btn) btn.textContent = 'Generating…';
+        modalStatus('Generating face image… (this takes ~10s)', 'info');
         await api('/api/avatars/' + encodeURIComponent(avatar_id) + '/generate-face', { method: 'POST', body: JSON.stringify({ description }), admin: true });
-        toast('Face generated (saved to avatar folder). Save + Sync to R2.', 'ok');
+        modalStatus('✓ Face generated! Now click Save then Sync to R2 to push to CDN.', 'ok');
+        await loadAvatars();
       } catch (e) {
-        toast(e.message || String(e), 'error');
+        modalStatus('✗ ' + (e.message || String(e)), 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Generate face'; }
       }
     }
 
     async function generatePortraitFromModal() {
+      const btn = qs('#av_btn_portrait');
       try {
         const avatar_id = qs('#av_id').value.trim();
         const description = qs('#av_desc').value.trim();
-        if (!avatar_id) throw new Error('avatar_id required');
-        if (!description) throw new Error('description required');
+        if (!avatar_id) throw new Error('Fill in Avatar ID first');
+        if (!description) throw new Error('Fill in Description first (used for image generation)');
+        if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+        modalStatus('Saving avatar…', 'info');
+        await _saveAvatarSilent();
+        if (btn) btn.textContent = 'Generating…';
+        modalStatus('Generating portrait image… (this takes ~10s)', 'info');
         await api('/api/avatars/' + encodeURIComponent(avatar_id) + '/generate-portrait', { method: 'POST', body: JSON.stringify({ description }), admin: true });
-        toast('Portrait generated (saved to avatar folder). Save + Sync to R2.', 'ok');
+        modalStatus('✓ Portrait generated! Now click Save then Sync to R2 to push to CDN.', 'ok');
+        await loadAvatars();
       } catch (e) {
-        toast(e.message || String(e), 'error');
+        modalStatus('✗ ' + (e.message || String(e)), 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Generate portrait'; }
+      }
+    }
+
+    function editorStatus(msg, kind) {
+      const el = qs('#ed_gen_status');
+      if (!el) return;
+      const colors = { ok: 'text-emerald-400', error: 'text-rose-400', info: 'text-slate-300' };
+      el.className = 'rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs ' + (colors[kind] || colors.info);
+      el.textContent = msg;
+    }
+
+    async function generateFaceFromEditor() {
+      const btn = qs('#ed_btn_face');
+      try {
+        const aid = state.selectedAvatarId;
+        if (!aid) throw new Error('No avatar selected');
+        const data = await api('/api/avatars/' + encodeURIComponent(aid), { method: 'GET' });
+        const description = (data.persona || {}).description || '';
+        if (!description) throw new Error('Avatar has no description — add one in Advanced → PERSONA JSON (description field)');
+        if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+        editorStatus('Generating face image… (~10s)', 'info');
+        await api('/api/avatars/' + encodeURIComponent(aid) + '/generate-face', { method: 'POST', body: JSON.stringify({ description }), admin: true });
+        editorStatus('✓ Face generated! Click Sync to R2 to push to CDN.', 'ok');
+        await renderAvatarEditor();
+      } catch (e) {
+        editorStatus('✗ ' + (e.message || String(e)), 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Generate face'; }
+      }
+    }
+
+    async function generatePortraitFromEditor() {
+      const btn = qs('#ed_btn_portrait');
+      try {
+        const aid = state.selectedAvatarId;
+        if (!aid) throw new Error('No avatar selected');
+        const data = await api('/api/avatars/' + encodeURIComponent(aid), { method: 'GET' });
+        const description = (data.persona || {}).description || '';
+        if (!description) throw new Error('Avatar has no description — add one in Advanced → PERSONA JSON (description field)');
+        if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+        editorStatus('Generating portrait image… (~10s)', 'info');
+        await api('/api/avatars/' + encodeURIComponent(aid) + '/generate-portrait', { method: 'POST', body: JSON.stringify({ description }), admin: true });
+        editorStatus('✓ Portrait generated! Click Sync to R2 to push to CDN.', 'ok');
+        await renderAvatarEditor();
+      } catch (e) {
+        editorStatus('✗ ' + (e.message || String(e)), 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Generate portrait'; }
       }
     }
 
