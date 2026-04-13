@@ -8,6 +8,3 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 restartPolicyType = "ON_FAILURE"
-healthcheckPath = "/health"
-# Cold starts / image pull: allow margin beyond default probe interval
-healthcheckTimeout = 60
