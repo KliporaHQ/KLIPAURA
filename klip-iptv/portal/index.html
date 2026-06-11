@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KLIP IPTV - Device Link</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #0f172a; color: #e2e8f0; padding: 20px; max-width: 600px; margin: 0 auto; }
+        .container { background: #1e2937; padding: 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: none; }
+        input { background: #334155; color: white; }
+        button { background: #22c55e; color: black; font-weight: bold; cursor: pointer; }
+        button:hover { background: #16a34a; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>KLIP IPTV Device Activation</h1>
+        <p>Enter your TV MAC + playlist to link (with Geo-Proxy support).</p>
+        
+        <label>MAC Address</label>
+        <input type="text" id="mac" value="bb:25:6a:b1:8d:99">
+        
+        <label>Device Key (optional)</label>
+        <input type="text" id="key" placeholder="830829">
+        
+        <label>M3U Playlist URL</label>
+        <input type="text" id="playlist" placeholder="https://your-playlist.m3u">
+        
+        <label><input type="checkbox" id="proxy" checked> Enable Geo-Proxy for locked channels</label>
+        
+        <button onclick="linkDevice()">Link Device & Activate</button>
+        
+        <div id="status"></div>
+    </div>
+
+    <script>
+        async function linkDevice() {
+            const mac = document.getElementById('mac').value.trim();
+            const device_key = document.getElementById('key').value.trim();
+            const playlist_url = document.getElementById('playlist').value.trim();
+            const enable_proxy = document.getElementById('proxy').checked;
+
+            if (!mac || !playlist_url) {
+                alert('MAC and Playlist URL are required!');
+                return;
+            }
+
+            const status = document.getElementById('status');
+            status.innerHTML = 'Linking...';
+
+            try {
+                const res = await fetch('/api/link', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mac, device_key, playlist_url, enable_proxy })
+                });
+                
+                const data = await res.json();
+                status.innerHTML = `<strong style="color:green">${data.message || 'Success!'}</strong><br>Reload your KLIP IPTV app on TV.`;
+            } catch (e) {
+                status.innerHTML = `<strong style="color:red">Error: ${e.message}</strong>`;
+            }
+        }
+    </script>
+</body>
+</html>
